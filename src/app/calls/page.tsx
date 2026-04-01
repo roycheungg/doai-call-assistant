@@ -1,0 +1,169 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Phone, ChevronLeft, ChevronRight } from "lucide-react";
+import { format } from "date-fns";
+
+interface Call {
+  id: string;
+  vapiCallId: string;
+  phoneNumber: string;
+  status: string;
+  duration: number;
+  summary: string | null;
+  sentiment: string | null;
+  createdAt: string;
+  lead: { name: string | null; company: string | null } | null;
+}
+
+export default function CallsPage() {
+  const [calls, setCalls] = useState<Call[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchCalls() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/calls?page=${page}&limit=20`);
+        const data = await res.json();
+        setCalls(data.calls || []);
+        setTotalPages(data.totalPages || 1);
+      } catch (error) {
+        console.error("Failed to fetch calls:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchCalls();
+  }, [page]);
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Call History</h1>
+        <p className="text-muted-foreground mt-1">
+          All calls handled by your AI assistant
+        </p>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Caller</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Duration</TableHead>
+                <TableHead>Sentiment</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Summary</TableHead>
+                <TableHead>Date</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-12">
+                    <div className="animate-spin w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full mx-auto" />
+                  </TableCell>
+                </TableRow>
+              ) : calls.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-12">
+                    <Phone className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-muted-foreground">No calls recorded yet</p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                calls.map((call) => (
+                  <TableRow key={call.id}>
+                    <TableCell className="font-medium">
+                      {call.lead?.name || "Unknown"}
+                      {call.lead?.company && (
+                        <span className="text-xs text-muted-foreground block">
+                          {call.lead.company}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">{call.phoneNumber}</TableCell>
+                    <TableCell className="text-sm">{formatDuration(call.duration)}</TableCell>
+                    <TableCell>
+                      {call.sentiment && (
+                        <Badge
+                          variant={
+                            call.sentiment === "positive"
+                              ? "default"
+                              : call.sentiment === "negative"
+                                ? "destructive"
+                                : "secondary"
+                          }
+                          className="text-[10px]"
+                        >
+                          {call.sentiment}
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-[10px]">
+                        {call.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate text-sm text-muted-foreground">
+                      {call.summary || "—"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {format(new Date(call.createdAt), "MMM d, h:mm a")}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {page} of {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Call {
+  id          String   @id @default(cuid())
+  vapiCallId  String   @unique
+  phoneNumber String
+  status      String   @default("completed") // completed, transferred, voicemail, failed
+  duration    Int      @default(0) // seconds
+  transcript  Json?    // full conversation transcript
+  summary     String?  // AI-generated call summary
+  sentiment   String?  // positive, neutral, negative
+  recordingUrl String?
+  costCents   Int?     // call cost in cents
+  endReason   String?  // customer_ended, assistant_ended, error
+  leadId      String?
+  lead        Lead?    @relation(fields: [leadId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([phoneNumber])
+  @@index([createdAt])
+  @@map("ca_calls")
+}
+
+model Lead {
+  id        String     @id @default(cuid())
+  name      String?
+  email     String?
+  phone     String
+  company   String?
+  issue     String?    // what they called about
+  status    String     @default("new") // new, callback_booked, contacted, resolved, lost
+  source    String     @default("phone") // phone, manual
+  notes     String?
+  calls     Call[]
+  callbacks Callback[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([phone])
+  @@index([status])
+  @@index([createdAt])
+  @@map("ca_leads")
+}
+
+model Callback {
+  id          String   @id @default(cuid())
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id])
+  assignedTo  String   // team member name or email
+  scheduledAt DateTime
+  status      String   @default("pending") // pending, completed, missed, cancelled
+  notes       String?
+  calendarEventId String? // Google Calendar event ID
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([scheduledAt])
+  @@index([status])
+  @@map("ca_callbacks")
+}
+
+model BusinessSettings {
+  id                  String @id @default("default")
+  businessName        String @default("DOAI Systems")
+  businessDescription String @default("")
+  services            Json   @default("[]")
+  teamMembers         Json   @default("[]")
+  operatingHours      Json   @default("{}")
+  greetingMessage     String?
+  vapiAssistantId     String?
+  vapiPhoneNumberId   String?
+  updatedAt           DateTime @updatedAt
+
+  @@map("ca_business_settings")
+}

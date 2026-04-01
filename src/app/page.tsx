@@ -1,65 +1,125 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useState } from "react";
+import { StatCard } from "@/components/dashboard/stat-card";
+import { RecentCalls } from "@/components/dashboard/recent-calls";
+import { CallbacksList } from "@/components/dashboard/callbacks-list";
+import { Phone, Users, Clock, PhoneIncoming } from "lucide-react";
+
+interface Stats {
+  totalCalls: number;
+  callsToday: number;
+  callsThisWeek: number;
+  callsThisMonth: number;
+  totalLeads: number;
+  newLeads: number;
+  pendingCallbacks: number;
+  avgDuration: number;
+  recentCalls: Array<{
+    id: string;
+    phoneNumber: string;
+    status: string;
+    duration: number;
+    summary: string | null;
+    sentiment: string | null;
+    createdAt: string;
+    lead: { name: string | null; company: string | null } | null;
+  }>;
+}
+
+interface Callback {
+  id: string;
+  assignedTo: string;
+  scheduledAt: string;
+  status: string;
+  notes: string | null;
+  lead: { name: string | null; phone: string; company: string | null };
+}
+
+export default function DashboardPage() {
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [callbacks, setCallbacks] = useState<Callback[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [statsRes, callbacksRes] = await Promise.all([
+          fetch("/api/stats"),
+          fetch("/api/callbacks?status=pending"),
+        ]);
+        const statsData = await statsRes.json();
+        const callbacksData = await callbacksRes.json();
+        setStats(statsData);
+        setCallbacks(callbacksData.callbacks || []);
+      } catch (error) {
+        console.error("Failed to fetch dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <p className="text-muted-foreground mt-1">
+          Overview of your AI call assistant activity
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="Calls Today"
+          value={stats?.callsToday || 0}
+          subtitle={`${stats?.callsThisWeek || 0} this week`}
+          icon={PhoneIncoming}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+        <StatCard
+          title="Total Calls"
+          value={stats?.totalCalls || 0}
+          subtitle={`${stats?.callsThisMonth || 0} this month`}
+          icon={Phone}
+        />
+        <StatCard
+          title="Leads Captured"
+          value={stats?.totalLeads || 0}
+          subtitle={`${stats?.newLeads || 0} new this week`}
+          icon={Users}
+          trend="up"
+        />
+        <StatCard
+          title="Avg Duration"
+          value={formatDuration(stats?.avgDuration || 0)}
+          subtitle={`${stats?.pendingCallbacks || 0} callbacks pending`}
+          icon={Clock}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <RecentCalls calls={stats?.recentCalls || []} />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div>
+          <CallbacksList callbacks={callbacks} />
         </div>
-      </main>
+      </div>
     </div>
   );
 }
