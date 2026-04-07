@@ -14,7 +14,7 @@
   },
   "firstMessage": "Hello, thank you for calling DOAI Systems! My name is Alex, your AI assistant. How can I help you today?",
   "endCallMessage": "Thank you for calling DOAI Systems. Have a great day!",
-  "serverUrl": "https://your-domain.com/api/vapi/functions",
+  "serverUrl": "https://call.doaisystems.co.uk/api/vapi/functions",
   "serverUrlSecret": "your-webhook-secret",
   "endCallFunctionEnabled": true,
   "recordingEnabled": true,

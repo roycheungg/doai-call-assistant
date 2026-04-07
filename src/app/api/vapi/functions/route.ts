@@ -15,16 +15,19 @@ export async function POST(req: NextRequest) {
 
     let name: string | undefined;
     let parameters: Record<string, unknown> = {};
+    let toolCallId: string | undefined;
 
     // Format 1: Server URL webhook (function-call type)
     if (body.message?.type === "function-call") {
       name = body.message.functionCall?.name;
       parameters = body.message.functionCall?.parameters || {};
+      toolCallId = body.message.functionCall?.id;
     }
     // Format 2: API Request tool with toolCallList
     else if (body.message?.toolCallList) {
       const toolCall = body.message.toolCallList[0];
       name = toolCall?.function?.name;
+      toolCallId = toolCall?.id;
       try {
         parameters = typeof toolCall?.function?.arguments === "string"
           ? JSON.parse(toolCall.function.arguments)
@@ -37,6 +40,7 @@ export async function POST(req: NextRequest) {
     else if (body.message?.type === "tool-calls") {
       const toolCall = body.message.toolCallList?.[0] || body.message.toolCalls?.[0];
       name = toolCall?.function?.name;
+      toolCallId = toolCall?.id;
       try {
         parameters = typeof toolCall?.function?.arguments === "string"
           ? JSON.parse(toolCall.function.arguments)
@@ -47,7 +51,6 @@ export async function POST(req: NextRequest) {
     }
     // Format 4: Direct parameters (some API Request tool configs)
     else if (body.name || body.phone || body.date) {
-      // Try to infer function from the URL or parameters
       if (body.phone && !body.date) {
         name = "save_customer_details";
         parameters = body;
@@ -62,6 +65,7 @@ export async function POST(req: NextRequest) {
     // Format 5: Wrapped in a "tool_call" key
     else if (body.tool_call) {
       name = body.tool_call.name || body.tool_call.function?.name;
+      toolCallId = body.tool_call.id;
       parameters = body.tool_call.parameters || body.tool_call.function?.arguments || {};
       if (typeof parameters === "string") {
         try { parameters = JSON.parse(parameters); } catch { parameters = {}; }
@@ -106,8 +110,15 @@ export async function POST(req: NextRequest) {
 
     console.log(`[VAPI] Function ${name} result:`, JSON.stringify(result));
 
-    // Vapi expects results in this format
-    return NextResponse.json({ results: [{ result: JSON.stringify(result) }] });
+    // Vapi expects results with toolCallId for matching
+    const responseItem: { toolCallId?: string; result: string } = {
+      result: JSON.stringify(result),
+    };
+    if (toolCallId) {
+      responseItem.toolCallId = toolCallId;
+    }
+
+    return NextResponse.json({ results: [responseItem] });
   } catch (error) {
     console.error("[VAPI] Function call error:", error);
     return NextResponse.json(
