@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { createHmac } from "crypto";
+
+const WEBHOOK_SECRET = process.env.VAPI_WEBHOOK_SECRET;
+
+function verifyVapiSignature(payload: string, signature: string | null): boolean {
+  if (!WEBHOOK_SECRET) return true; // Skip if no secret configured
+  if (!signature) return false;
+  const expected = createHmac("sha256", WEBHOOK_SECRET).update(payload).digest("hex");
+  return signature === expected;
+}
 
 // GET handler for testing webhook accessibility
 export async function GET() {
@@ -14,7 +24,16 @@ export async function GET() {
 // Docs: https://docs.vapi.ai/server-url/events
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const rawBody = await req.text();
+
+    // Verify webhook signature if secret is configured
+    const signature = req.headers.get("x-vapi-signature");
+    if (WEBHOOK_SECRET && !verifyVapiSignature(rawBody, signature)) {
+      console.warn("[VAPI WEBHOOK] Invalid signature");
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+
+    const body = JSON.parse(rawBody);
 
     // Log the full payload for debugging
     console.log("[VAPI WEBHOOK] Received:", JSON.stringify(body, null, 2));
@@ -89,8 +108,16 @@ async function handleEndOfCallReport(message: any) {
   // Extract ended reason
   const endedReason = message.endedReason || null;
 
-  // Extract duration and cost from call object
-  const duration = call.duration || 0;
+  // Extract duration from call object - try multiple Vapi field paths
+  // Vapi may send as call.duration (seconds), message.durationSeconds,
+  // or we can compute from startedAt/endedAt timestamps
+  const rawDuration =
+    call.duration ||
+    message.durationSeconds ||
+    (call.endedAt && call.startedAt
+      ? (new Date(call.endedAt).getTime() - new Date(call.startedAt).getTime()) / 1000
+      : 0);
+  const duration = Math.round(rawDuration);
   const cost = call.cost || call.costs?.total || 0;
   const callId = call.id || `unknown-${Date.now()}`;
 
@@ -98,6 +125,9 @@ async function handleEndOfCallReport(message: any) {
     callId,
     phoneNumber,
     duration,
+    rawDurationSource: call.duration ? "call.duration" : message.durationSeconds ? "message.durationSeconds" : (call.endedAt && call.startedAt) ? "timestamps" : "none",
+    callStartedAt: call.startedAt,
+    callEndedAt: call.endedAt,
     hasSummary: !!summary,
     hasTranscript: !!transcript,
     hasRecording: !!recordingUrl,

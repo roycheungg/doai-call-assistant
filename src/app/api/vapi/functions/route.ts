@@ -74,7 +74,10 @@ export async function POST(req: NextRequest) {
 
     if (!name) {
       console.log("[VAPI] Could not determine function name from payload");
-      return NextResponse.json({ result: { error: "Could not determine function name" } });
+      return NextResponse.json(
+        { results: [{ result: JSON.stringify({ error: "Could not determine function name" }) }] },
+        { status: 400 }
+      );
     }
 
     console.log(`[VAPI] Executing function: ${name} with params:`, JSON.stringify(parameters));
