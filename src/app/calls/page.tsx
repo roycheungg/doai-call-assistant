@@ -19,7 +19,6 @@ interface Call {
   id: string;
   vapiCallId: string;
   phoneNumber: string;
-  status: string;
   duration: number;
   summary: string | null;
   sentiment: string | null;
@@ -74,7 +73,6 @@ export default function CallsPage() {
                 <TableHead>Phone</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Sentiment</TableHead>
-                <TableHead>Status</TableHead>
                 <TableHead>Summary</TableHead>
                 <TableHead>Date</TableHead>
               </TableRow>
@@ -82,13 +80,13 @@ export default function CallsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12">
+                  <TableCell colSpan={6} className="text-center py-12">
                     <div className="animate-spin w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full mx-auto" />
                   </TableCell>
                 </TableRow>
               ) : calls.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12">
+                  <TableCell colSpan={6} className="text-center py-12">
                     <Phone className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                     <p className="text-muted-foreground">No calls recorded yet</p>
                   </TableCell>
@@ -121,11 +119,6 @@ export default function CallsPage() {
                           {call.sentiment}
                         </Badge>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-[10px]">
-                        {call.status}
-                      </Badge>
                     </TableCell>
                     <TableCell className="max-w-xs truncate text-sm text-muted-foreground">
                       {call.summary || "—"}
