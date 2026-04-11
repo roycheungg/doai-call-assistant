@@ -31,6 +31,7 @@ export default function CallsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [expandedSummary, setExpandedSummary] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchCalls() {
@@ -120,7 +121,11 @@ export default function CallsPage() {
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell className="max-w-xs truncate text-sm text-muted-foreground">
+                    <TableCell
+                      className={`text-sm text-muted-foreground cursor-pointer ${expandedSummary === call.id ? "whitespace-normal" : "max-w-xs truncate"}`}
+                      onClick={() => setExpandedSummary(expandedSummary === call.id ? null : call.id)}
+                      title={expandedSummary !== call.id ? "Click to expand" : "Click to collapse"}
+                    >
                       {call.summary || "—"}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">

@@ -37,6 +37,7 @@ const statusColors: Record<string, "default" | "secondary" | "destructive" | "ou
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedIssue, setExpandedIssue] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchLeads() {
@@ -95,12 +96,16 @@ export default function LeadsPage() {
                 leads.map((lead) => (
                   <TableRow key={lead.id}>
                     <TableCell className="font-medium">
-                      {lead.name || "Unknown"}
+                      {lead.name && !lead.name.includes("{{") ? lead.name : "Unknown"}
                     </TableCell>
                     <TableCell className="text-sm">{lead.phone}</TableCell>
                     <TableCell className="text-sm">{lead.email || "—"}</TableCell>
                     <TableCell className="text-sm">{lead.company || "—"}</TableCell>
-                    <TableCell className="max-w-xs truncate text-sm text-muted-foreground">
+                    <TableCell
+                      className={`text-sm text-muted-foreground cursor-pointer ${expandedIssue === lead.id ? "whitespace-normal" : "max-w-xs truncate"}`}
+                      onClick={() => setExpandedIssue(expandedIssue === lead.id ? null : lead.id)}
+                      title={expandedIssue !== lead.id ? "Click to expand" : "Click to collapse"}
+                    >
                       {lead.issue || "—"}
                     </TableCell>
                     <TableCell>
