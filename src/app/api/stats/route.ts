@@ -43,10 +43,10 @@ export async function GET() {
       }),
       // Call volume last 30 days (raw SQL for DATE grouping)
       prisma.$queryRaw<{ day: string; count: number }[]>`
-        SELECT DATE(created_at)::text as day, COUNT(*)::int as count
+        SELECT DATE("createdAt")::text as day, COUNT(*)::int as count
         FROM ca_calls
-        WHERE created_at > ${thirtyDaysAgo}
-        GROUP BY DATE(created_at)
+        WHERE "createdAt" > ${thirtyDaysAgo}
+        GROUP BY DATE("createdAt")
         ORDER BY day
       `,
     ]);
