@@ -8,6 +8,7 @@ export async function GET() {
     const weekStart = new Date(todayStart);
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const [
       totalCalls,
@@ -19,6 +20,8 @@ export async function GET() {
       pendingCallbacks,
       avgDuration,
       recentCalls,
+      sentimentCounts,
+      callVolumeRaw,
     ] = await Promise.all([
       prisma.call.count(),
       prisma.call.count({ where: { createdAt: { gte: todayStart } } }),
@@ -33,7 +36,32 @@ export async function GET() {
         orderBy: { createdAt: "desc" },
         include: { lead: true },
       }),
+      // Sentiment distribution
+      prisma.call.groupBy({
+        by: ["sentiment"],
+        _count: { _all: true },
+      }),
+      // Call volume last 30 days (raw SQL for DATE grouping)
+      prisma.$queryRaw<{ day: string; count: number }[]>`
+        SELECT DATE(created_at)::text as day, COUNT(*)::int as count
+        FROM calls
+        WHERE created_at > ${thirtyDaysAgo}
+        GROUP BY DATE(created_at)
+        ORDER BY day
+      `,
     ]);
+
+    // Sentiment distribution
+    const sentimentDistribution = sentimentCounts.map((s) => ({
+      sentiment: s.sentiment || "unknown",
+      count: s._count._all,
+    }));
+
+    // Call volume per day (last 30 days)
+    const callVolume = (callVolumeRaw || []).map((r) => ({
+      day: r.day,
+      count: Number(r.count),
+    }));
 
     return NextResponse.json({
       totalCalls,
@@ -45,6 +73,8 @@ export async function GET() {
       pendingCallbacks,
       avgDuration: Math.round(avgDuration._avg.duration || 0),
       recentCalls,
+      sentimentDistribution,
+      callVolume,
     });
   } catch (error) {
     console.error("[STATS API] GET error:", error);

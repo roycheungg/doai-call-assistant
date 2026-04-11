@@ -4,6 +4,65 @@ import { createHmac } from "crypto";
 
 const WEBHOOK_SECRET = process.env.VAPI_WEBHOOK_SECRET;
 
+/**
+ * Generate a basic summary from the transcript when Vapi doesn't provide one.
+ * The transcript is a JSON array of {role, message} objects (or similar shapes).
+ * Extracts the customer's messages and produces a 1-2 sentence summary.
+ */
+function generateSummaryFromTranscript(transcript: unknown): string | null {
+  try {
+    const messages: { role?: string; message?: string; text?: string; content?: string }[] =
+      Array.isArray(transcript) ? transcript : [];
+
+    if (messages.length === 0) return null;
+
+    // Extract customer messages (user/customer role)
+    const customerMessages = messages
+      .filter((m) => m.role === "user" || m.role === "customer")
+      .map((m) => m.message || m.text || m.content || "")
+      .filter(Boolean);
+
+    // Extract assistant messages for context
+    const assistantMessages = messages
+      .filter((m) => m.role === "assistant" || m.role === "bot")
+      .map((m) => m.message || m.text || m.content || "")
+      .filter(Boolean);
+
+    if (customerMessages.length === 0 && assistantMessages.length === 0) return null;
+
+    const totalMessages = messages.length;
+    const customerText = customerMessages.join(" ").slice(0, 200);
+
+    // Build a concise summary
+    const parts: string[] = [];
+    parts.push(`Call with ${totalMessages} exchanges.`);
+
+    if (customerText) {
+      // Take the first meaningful customer message as the topic
+      const firstCustomerMsg = customerMessages[0]?.slice(0, 100);
+      if (firstCustomerMsg && firstCustomerMsg.length > 10) {
+        parts.push(`Customer discussed: "${firstCustomerMsg}${customerMessages[0]!.length > 100 ? "..." : ""}"`);
+      }
+    }
+
+    // Check for callback/booking mentions
+    const fullText = messages.map((m) => m.message || m.text || m.content || "").join(" ").toLowerCase();
+    if (fullText.includes("callback") || fullText.includes("call back") || fullText.includes("call you back")) {
+      parts.push("Callback was discussed.");
+    }
+    if (fullText.includes("book") || fullText.includes("appointment") || fullText.includes("schedule")) {
+      parts.push("Booking/appointment was discussed.");
+    }
+    if (fullText.includes("transfer") || fullText.includes("speak to someone")) {
+      parts.push("Transfer was requested.");
+    }
+
+    return parts.join(" ");
+  } catch {
+    return null;
+  }
+}
+
 function verifyVapiSignature(payload: string, signature: string | null): boolean {
   if (!WEBHOOK_SECRET) return true; // Skip if no secret configured
   if (!signature) return false;
@@ -94,8 +153,12 @@ async function handleEndOfCallReport(message: any) {
   // Extract transcript - Vapi puts it in artifact.transcript
   const transcript = artifact.transcript || message.transcript || null;
 
-  // Extract summary - Vapi puts it in analysis.summary
-  const summary = analysis.summary || message.summary || null;
+  // Extract summary - Vapi puts it in analysis.summary.
+  // If missing, generate a basic summary from the transcript.
+  let summary = analysis.summary || message.summary || null;
+  if (!summary && transcript) {
+    summary = generateSummaryFromTranscript(transcript);
+  }
 
   // Extract recording URL - Vapi puts it in artifact.recording or artifact.recordingUrl
   const recordingUrl =
