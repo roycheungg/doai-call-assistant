@@ -181,10 +181,10 @@ async function processMessage(
     },
   });
 
-  // Update conversation timestamp
+  // Update conversation timestamp and mark as unread
   await prisma.whatsAppConversation.update({
     where: { id: conversation.id },
-    data: { lastMessageAt: new Date() },
+    data: { lastMessageAt: new Date(), isRead: false },
   });
 
   // Mark incoming message as read (blue ticks)
