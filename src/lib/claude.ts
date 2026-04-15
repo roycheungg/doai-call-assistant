@@ -1,7 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { execFile } from "child_process";
 import { prisma } from "@/lib/prisma";
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -54,10 +53,57 @@ Guidelines:
 - Keep responses under 500 words as these are WhatsApp messages`;
 }
 
-export async function getChatResponse(
+// --- Claude Code CLI method (uses Max plan subscription) ---
+
+function formatPromptForCLI(
+  messages: ChatMessage[],
+  systemPrompt: string
+): string {
+  const recentMessages = messages.slice(-30);
+  const conversation = recentMessages
+    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+    .join("\n");
+
+  return `${systemPrompt}
+
+Conversation so far:
+${conversation}
+
+Respond to the last user message as the assistant. Be concise — this is a WhatsApp message.`;
+}
+
+async function getChatResponseCLI(
   messages: ChatMessage[],
   systemPrompt: string
 ): Promise<string> {
+  const prompt = formatPromptForCLI(messages, systemPrompt);
+
+  return new Promise((resolve) => {
+    execFile(
+      "claude",
+      ["-p", "--output-format", "text", prompt],
+      { timeout: 60_000, maxBuffer: 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          console.error("[CLAUDE CLI] Error:", error.message);
+          if (stderr) console.error("[CLAUDE CLI] Stderr:", stderr);
+          resolve("Sorry, I was unable to generate a response right now. Please try again.");
+          return;
+        }
+        const response = stdout.trim();
+        resolve(response || "Sorry, I was unable to generate a response.");
+      }
+    );
+  });
+}
+
+// --- Anthropic API method (uses API credits) ---
+
+async function getChatResponseAPI(
+  messages: ChatMessage[],
+  systemPrompt: string
+): Promise<string> {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
   const recentMessages = messages.slice(-30);
 
   const response = await anthropic.messages.create({
@@ -69,4 +115,16 @@ export async function getChatResponse(
 
   const textBlock = response.content.find((block) => block.type === "text");
   return textBlock?.text || "Sorry, I was unable to generate a response.";
+}
+
+// --- Public entry point: auto-selects CLI or API ---
+
+export async function getChatResponse(
+  messages: ChatMessage[],
+  systemPrompt: string
+): Promise<string> {
+  if (process.env.ANTHROPIC_API_KEY) {
+    return getChatResponseAPI(messages, systemPrompt);
+  }
+  return getChatResponseCLI(messages, systemPrompt);
 }
