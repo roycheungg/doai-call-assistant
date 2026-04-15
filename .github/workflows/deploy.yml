@@ -16,7 +16,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -e
-            cd /home/kaia/doai-call-assistant
+            cd /home/kaia/doai/call-assistant
 
             echo "==> Pulling latest code..."
             git fetch origin master
