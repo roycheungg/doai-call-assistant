@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenant, isErrorResponse } from "@/lib/tenant";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireTenant(req);
+  if (isErrorResponse(ctx)) return ctx;
+
   try {
     const { id } = await params;
     const { searchParams } = new URL(req.url);
@@ -13,9 +17,9 @@ export async function PATCH(
     if (channel === "website") {
       const conv = await prisma.websiteConversation.findUnique({
         where: { id },
-        select: { starred: true },
+        select: { starred: true, organizationId: true },
       });
-      if (!conv) {
+      if (!conv || conv.organizationId !== ctx.organizationId) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
       const updated = await prisma.websiteConversation.update({
@@ -28,10 +32,10 @@ export async function PATCH(
 
     const conversation = await prisma.whatsAppConversation.findUnique({
       where: { id },
-      select: { starred: true },
+      select: { starred: true, organizationId: true },
     });
 
-    if (!conversation) {
+    if (!conversation || conversation.organizationId !== ctx.organizationId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 

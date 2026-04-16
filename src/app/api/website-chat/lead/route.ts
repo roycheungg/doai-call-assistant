@@ -60,14 +60,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const organizationId = site.organizationId;
     // Find or create lead
     let lead = phone
-      ? await prisma.lead.findUnique({ where: { phone } })
+      ? await prisma.lead.findUnique({
+          where: { organizationId_phone: { organizationId, phone } },
+        })
       : null;
 
     if (!lead) {
       lead = await prisma.lead.create({
         data: {
+          organizationId,
           name: name || null,
           email,
           phone: phone || `website-${sessionId.slice(0, 8)}`,

@@ -103,6 +103,7 @@ export async function POST(req: NextRequest) {
     if (!conversation) {
       conversation = await prisma.websiteConversation.create({
         data: {
+          organizationId: site.organizationId,
           siteId,
           sessionId,
           userAgent: userAgent || null,
@@ -133,7 +134,10 @@ export async function POST(req: NextRequest) {
     }));
 
     // Get AI response
-    const rawResponse = await getChatResponse(chatMessages, site.systemPrompt);
+    const rawResponse = await getChatResponse(chatMessages, site.systemPrompt, {
+      organizationId: site.organizationId,
+      allowCLI: true,
+    });
 
     // Parse for lead marker
     const { cleanText, lead } = parseLeadMarker(rawResponse);
@@ -153,11 +157,11 @@ export async function POST(req: NextRequest) {
       };
 
       if (phone) {
-        // Find existing lead by phone
-        const existing = await prisma.lead.findUnique({ where: { phone } });
+        const existing = await prisma.lead.findUnique({
+          where: { organizationId_phone: { organizationId: site.organizationId, phone } },
+        });
         if (existing) {
           updateData.leadId = existing.id;
-          // Update missing fields on lead
           await prisma.lead.update({
             where: { id: existing.id },
             data: {
@@ -168,6 +172,7 @@ export async function POST(req: NextRequest) {
         } else {
           const created = await prisma.lead.create({
             data: {
+              organizationId: site.organizationId,
               name: lead.name || null,
               email: lead.email,
               phone,

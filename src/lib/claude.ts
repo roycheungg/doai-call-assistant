@@ -7,9 +7,18 @@ interface ChatMessage {
   content: string;
 }
 
-export async function buildSystemPrompt(): Promise<string> {
-  const settings = await prisma.businessSettings.findUnique({
-    where: { id: "default" },
+interface ChatOptions {
+  organizationId?: string;
+  allowCLI?: boolean;
+}
+
+/**
+ * Build a WhatsApp system prompt from an org's settings.
+ * Falls back to a generic template if the org has no custom prompt.
+ */
+export async function buildSystemPrompt(organizationId: string): Promise<string> {
+  const settings = await prisma.organizationSettings.findUnique({
+    where: { organizationId },
   });
 
   if (settings?.whatsappSystemPrompt) {
@@ -53,7 +62,7 @@ Guidelines:
 - Keep responses under 500 words as these are WhatsApp messages`;
 }
 
-// --- Claude Code CLI method (uses Max plan subscription) ---
+// --- Claude Code CLI method (Max plan, local testing only) ---
 
 function formatPromptForCLI(
   messages: ChatMessage[],
@@ -97,13 +106,14 @@ async function getChatResponseCLI(
   });
 }
 
-// --- Anthropic API method (uses API credits) ---
+// --- Anthropic API method (production) ---
 
 async function getChatResponseAPI(
   messages: ChatMessage[],
-  systemPrompt: string
+  systemPrompt: string,
+  apiKey: string
 ): Promise<string> {
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+  const anthropic = new Anthropic({ apiKey });
   const recentMessages = messages.slice(-30);
 
   const response = await anthropic.messages.create({
@@ -117,14 +127,43 @@ async function getChatResponseAPI(
   return textBlock?.text || "Sorry, I was unable to generate a response.";
 }
 
-// --- Public entry point: auto-selects CLI or API ---
+// --- Public entry point: routes between API and CLI based on org config ---
 
 export async function getChatResponse(
   messages: ChatMessage[],
-  systemPrompt: string
+  systemPrompt: string,
+  options?: ChatOptions
 ): Promise<string> {
-  if (process.env.ANTHROPIC_API_KEY) {
-    return getChatResponseAPI(messages, systemPrompt);
+  // Per-org API key override (for enterprise clients)
+  if (options?.organizationId) {
+    const org = await prisma.organization.findUnique({
+      where: { id: options.organizationId },
+      select: { anthropicApiKeyOverride: true, slug: true },
+    });
+
+    if (org?.anthropicApiKeyOverride) {
+      return getChatResponseAPI(messages, systemPrompt, org.anthropicApiKeyOverride);
+    }
+
+    // Claude CLI fallback - only allowed for the DOAI org and only if no shared key is set
+    if (
+      options.allowCLI &&
+      org?.slug === "doai" &&
+      !process.env.ANTHROPIC_API_KEY
+    ) {
+      return getChatResponseCLI(messages, systemPrompt);
+    }
   }
-  return getChatResponseCLI(messages, systemPrompt);
+
+  // Default: use the shared Anthropic API key
+  if (process.env.ANTHROPIC_API_KEY) {
+    return getChatResponseAPI(messages, systemPrompt, process.env.ANTHROPIC_API_KEY);
+  }
+
+  // Last-resort fallback
+  if (options?.allowCLI) {
+    return getChatResponseCLI(messages, systemPrompt);
+  }
+
+  return "Sorry, the AI service isn't configured yet. Please contact support.";
 }

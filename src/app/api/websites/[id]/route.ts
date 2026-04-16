@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenant, isErrorResponse } from "@/lib/tenant";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireTenant(req);
+  if (isErrorResponse(ctx)) return ctx;
+
   try {
     const { id } = await params;
     const site = await prisma.websiteConfig.findUnique({
@@ -13,7 +17,7 @@ export async function GET(
         _count: { select: { conversations: true } },
       },
     });
-    if (!site) {
+    if (!site || site.organizationId !== ctx.organizationId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     return NextResponse.json(site);
@@ -30,11 +34,23 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireTenant(req);
+  if (isErrorResponse(ctx)) return ctx;
+
   try {
     const { id } = await params;
+
+    // Verify ownership
+    const existing = await prisma.websiteConfig.findUnique({
+      where: { id },
+      select: { organizationId: true },
+    });
+    if (!existing || existing.organizationId !== ctx.organizationId) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const body = await req.json();
 
-    // Only allow updating specific fields - not siteId
     const updateData: Record<string, unknown> = {};
     const allowed = [
       "name",
@@ -65,11 +81,23 @@ export async function PUT(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireTenant(req);
+  if (isErrorResponse(ctx)) return ctx;
+
   try {
     const { id } = await params;
+
+    const existing = await prisma.websiteConfig.findUnique({
+      where: { id },
+      select: { organizationId: true },
+    });
+    if (!existing || existing.organizationId !== ctx.organizationId) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     await prisma.websiteConfig.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {

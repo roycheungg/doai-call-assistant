@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenant, isErrorResponse } from "@/lib/tenant";
 
 type NormalizedConversation = {
   id: string;
@@ -22,6 +23,9 @@ type NormalizedConversation = {
 };
 
 export async function GET(req: NextRequest) {
+  const ctx = await requireTenant(req);
+  if (isErrorResponse(ctx)) return ctx;
+
   try {
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get("page") || "1");
@@ -31,7 +35,7 @@ export async function GET(req: NextRequest) {
     const channel = searchParams.get("channel") || "all";
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const baseWhere: any = {};
+    const baseWhere: any = { organizationId: ctx.organizationId };
     if (filter === "unread") baseWhere.isRead = false;
     else if (filter === "starred") baseWhere.starred = true;
     else if (filter === "recent") {

@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenant, isErrorResponse } from "@/lib/tenant";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireTenant(req);
+  if (isErrorResponse(ctx)) return ctx;
+
   try {
     const { id } = await params;
     const { searchParams } = new URL(req.url);
@@ -20,11 +24,10 @@ export async function GET(
         },
       });
 
-      if (!conv) {
+      if (!conv || conv.organizationId !== ctx.organizationId) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
 
-      // Normalized shape
       return NextResponse.json({
         id: conv.id,
         channel: "website",
@@ -45,7 +48,6 @@ export async function GET(
       });
     }
 
-    // WhatsApp (default)
     const conversation = await prisma.whatsAppConversation.findUnique({
       where: { id },
       include: {
@@ -54,7 +56,7 @@ export async function GET(
       },
     });
 
-    if (!conversation) {
+    if (!conversation || conversation.organizationId !== ctx.organizationId) {
       return NextResponse.json(
         { error: "Conversation not found" },
         { status: 404 }

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Widget Test Page</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        max-width: 700px;
+        margin: 80px auto;
+        padding: 0 20px;
+        color: #1f2937;
+        line-height: 1.6;
+      }
+      h1 {
+        color: #111827;
+        margin-bottom: 8px;
+      }
+      .muted {
+        color: #6b7280;
+        margin-bottom: 30px;
+      }
+      code {
+        background: #f3f4f6;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+      pre {
+        background: #f3f4f6;
+        padding: 16px;
+        border-radius: 8px;
+        overflow-x: auto;
+      }
+      .card {
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 24px;
+        margin: 20px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Test page for the DOAI chat widget</h1>
+    <p class="muted">
+      The widget should appear as a floating bubble in the bottom-right. Click it
+      to open the chat.
+    </p>
+
+    <div class="card">
+      <h2>Lorem ipsum content</h2>
+      <p>
+        Dummy page content so there's something to scroll over. Try sending a
+        message, then check <code>/conversations</code> in the dashboard to see
+        your session.
+      </p>
+      <p>
+        To capture a lead, try giving the bot your name, email, and phone in the
+        chat — it should store you as a lead with <code>source="website"</code>.
+      </p>
+    </div>
+
+    <pre><code>&lt;script src="https://call.doaisystems.co.uk/widget.js"
+  data-site-id="demo" async&gt;&lt;/script&gt;</code></pre>
+
+    <!-- DOAI Chat Widget -->
+    <script
+      src="https://call.doaisystems.co.uk/widget.js"
+      data-site-id="demo"
+      async
+    ></script>
+  </body>
+</html>

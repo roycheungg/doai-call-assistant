@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { MainWrapper } from "@/components/dashboard/main-wrapper";
+import { SessionProvider } from "@/components/providers/session-provider";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -29,7 +30,9 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} dark h-full antialiased`}
     >
       <body className="h-full bg-[#0d1117] text-slate-200 overflow-hidden">
-        <MainWrapper>{children}</MainWrapper>
+        <SessionProvider>
+          <MainWrapper>{children}</MainWrapper>
+        </SessionProvider>
       </body>
     </html>
   );

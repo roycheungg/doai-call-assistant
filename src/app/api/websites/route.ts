@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenant, isErrorResponse } from "@/lib/tenant";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const ctx = await requireTenant(req);
+  if (isErrorResponse(ctx)) return ctx;
+
   try {
     const sites = await prisma.websiteConfig.findMany({
+      where: { organizationId: ctx.organizationId },
       orderBy: { createdAt: "desc" },
       include: {
         _count: { select: { conversations: true } },
@@ -20,6 +25,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const ctx = await requireTenant(req);
+  if (isErrorResponse(ctx)) return ctx;
+
   try {
     const body = await req.json();
     const {
@@ -49,6 +57,7 @@ export async function POST(req: NextRequest) {
 
     const site = await prisma.websiteConfig.create({
       data: {
+        organizationId: ctx.organizationId,
         siteId,
         name,
         botName: botName || "Assistant",

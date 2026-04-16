@@ -7,174 +7,308 @@ datasource db {
   provider = "postgresql"
 }
 
-model Call {
-  id          String   @id @default(cuid())
-  vapiCallId  String   @unique
-  phoneNumber String
-  status      String   @default("completed") // completed, transferred, voicemail, failed
-  duration    Int      @default(0) // seconds
-  transcript  Json?    // full conversation transcript
-  summary     String?  // AI-generated call summary
-  sentiment   String?  // positive, neutral, negative
-  recordingUrl String?
-  costCents   Int?     // call cost in cents
-  endReason   String?  // customer_ended, assistant_ended, error
-  leadId      String?
-  lead        Lead?    @relation(fields: [leadId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// ─────────────────────────────────────────────────────────────
+// Multi-tenancy + Auth
+// ─────────────────────────────────────────────────────────────
 
+model Organization {
+  id                      String   @id @default(cuid())
+  name                    String
+  slug                    String   @unique
+  planTier                String   @default("starter")
+  anthropicApiKeyOverride String?
+  enabled                 Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  users                 User[]
+  leads                 Lead[]
+  calls                 Call[]
+  callbacks             Callback[]
+  settings              OrganizationSettings?
+  whatsappConversations WhatsAppConversation[]
+  websites              WebsiteConfig[]
+  websiteConversations  WebsiteConversation[]
+  phoneNumbers          PhoneNumber[]
+
+  @@map("ca_organizations")
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String?
+  emailVerified  DateTime?
+  image          String?
+  role           String    @default("member") // member, admin, superAdmin
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  accounts       Account[]
+  sessions       Session[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("ca_users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("ca_accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("ca_sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("ca_verification_tokens")
+}
+
+model OrganizationSettings {
+  id                   String   @id @default(cuid())
+  organizationId       String   @unique
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  businessName         String
+  businessDescription  String   @default("")
+  services             Json     @default("[]")
+  teamMembers          Json     @default("[]")
+  operatingHours       Json     @default("{}")
+  greetingMessage      String?
+  vapiAssistantId      String?
+  vapiPhoneNumberId    String?
+  whatsappSystemPrompt String?
+  whatsappEnabled      Boolean  @default(false)
+  updatedAt            DateTime @updatedAt
+
+  @@map("ca_organization_settings")
+}
+
+model PhoneNumber {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  number                String   @unique // E.164 format
+  channel               String   // "vapi" or "whatsapp"
+  vapiPhoneNumberId     String?
+  whatsappPhoneNumberId String?
+  label                 String?
+  active                Boolean  @default(true)
+  createdAt             DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([channel])
+  @@index([whatsappPhoneNumberId])
+  @@map("ca_phone_numbers")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Core CRM
+// ─────────────────────────────────────────────────────────────
+
+model Call {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vapiCallId     String   @unique
+  phoneNumber    String
+  status         String   @default("completed") // completed, transferred, voicemail, failed
+  duration       Int      @default(0)
+  transcript     Json?
+  summary        String?
+  sentiment      String?
+  recordingUrl   String?
+  costCents      Int?
+  endReason      String?
+  leadId         String?
+  lead           Lead?    @relation(fields: [leadId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
   @@index([phoneNumber])
   @@index([createdAt])
   @@map("ca_calls")
 }
 
 model Lead {
-  id        String     @id @default(cuid())
-  name      String?
-  email     String?
-  phone     String
-  company   String?
-  issue     String?    // what they called about
-  status    String     @default("new") // new, callback_booked, contacted, resolved, lost
-  source    String     @default("phone") // phone, manual, whatsapp, website
-  notes     String?
-  calls     Call[]
-  callbacks Callback[]
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String?
+  email          String?
+  phone          String
+  company        String?
+  issue          String?
+  status         String   @default("new") // new, callback_booked, contacted, resolved, lost
+  source         String   @default("phone") // phone, manual, whatsapp, website
+  notes          String?
+  calls          Call[]
+  callbacks      Callback[]
   whatsappConversations WhatsAppConversation[]
   websiteConversations  WebsiteConversation[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  @@unique([phone])
+  @@unique([organizationId, phone])
+  @@index([organizationId])
   @@index([status])
   @@index([createdAt])
   @@map("ca_leads")
 }
 
 model Callback {
-  id          String   @id @default(cuid())
-  leadId      String
-  lead        Lead     @relation(fields: [leadId], references: [id])
-  assignedTo  String   // team member name or email
-  scheduledAt DateTime
-  status      String   @default("pending") // pending, completed, missed, cancelled
-  notes       String?
-  calendarEventId String? // Google Calendar event ID
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leadId          String
+  lead            Lead     @relation(fields: [leadId], references: [id])
+  assignedTo      String
+  scheduledAt     DateTime
+  status          String   @default("pending")
+  notes           String?
+  calendarEventId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
+  @@index([organizationId])
   @@index([scheduledAt])
   @@index([status])
   @@map("ca_callbacks")
 }
 
-model BusinessSettings {
-  id                    String @id @default("default")
-  businessName          String @default("DOAI Systems")
-  businessDescription   String @default("")
-  services              Json   @default("[]")
-  teamMembers           Json   @default("[]")
-  operatingHours        Json   @default("{}")
-  greetingMessage       String?
-  vapiAssistantId       String?
-  vapiPhoneNumberId     String?
-  whatsappSystemPrompt  String?
-  whatsappEnabled       Boolean @default(false)
-  updatedAt             DateTime @updatedAt
-
-  @@map("ca_business_settings")
-}
+// ─────────────────────────────────────────────────────────────
+// WhatsApp
+// ─────────────────────────────────────────────────────────────
 
 model WhatsAppConversation {
-  id            String   @id @default(cuid())
-  waId          String   @unique
-  phoneNumber   String
-  contactName   String?
-  leadId        String?
-  lead          Lead?    @relation(fields: [leadId], references: [id])
-  status        String   @default("active") // active, closed, archived
-  isRead        Boolean  @default(false)
-  starred       Boolean  @default(false)
-  lastMessageAt DateTime @default(now())
-  messages      WhatsAppMessage[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  waId           String
+  phoneNumber    String
+  contactName    String?
+  leadId         String?
+  lead           Lead?    @relation(fields: [leadId], references: [id])
+  status         String   @default("active")
+  isRead         Boolean  @default(false)
+  starred        Boolean  @default(false)
+  lastMessageAt  DateTime @default(now())
+  messages       WhatsAppMessage[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  @@map("ca_whatsapp_conversations")
+  @@unique([organizationId, waId])
+  @@index([organizationId])
   @@index([waId])
   @@index([phoneNumber])
   @@index([status])
   @@index([lastMessageAt])
+  @@map("ca_whatsapp_conversations")
 }
 
 model WhatsAppMessage {
   id             String   @id @default(cuid())
   conversationId String
   conversation   WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           String   // "user" or "assistant"
+  role           String
   content        String
   waMessageId    String?  @unique
-  status         String   @default("sent") // sent, delivered, read, failed
+  status         String   @default("sent")
   createdAt      DateTime @default(now())
 
-  @@map("ca_whatsapp_messages")
   @@index([conversationId])
   @@index([createdAt])
+  @@map("ca_whatsapp_messages")
 }
 
-model WebsiteConfig {
-  id              String   @id @default(cuid())
-  siteId          String   @unique
-  name            String
-  botName         String   @default("Assistant")
-  systemPrompt    String
-  greeting        String?
-  quickReplies    Json     @default("[]")
-  brandColor      String   @default("#2563eb")
-  allowedOrigins  Json     @default("[]")
-  enabled         Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  conversations   WebsiteConversation[]
+// ─────────────────────────────────────────────────────────────
+// Website chatbot
+// ─────────────────────────────────────────────────────────────
 
+model WebsiteConfig {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  siteId         String
+  name           String
+  botName        String   @default("Assistant")
+  systemPrompt   String
+  greeting       String?
+  quickReplies   Json     @default("[]")
+  brandColor     String   @default("#2563eb")
+  allowedOrigins Json     @default("[]")
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  conversations  WebsiteConversation[]
+
+  @@unique([siteId])
+  @@index([organizationId])
   @@map("ca_website_configs")
 }
 
 model WebsiteConversation {
-  id            String   @id @default(cuid())
-  siteId        String
-  site          WebsiteConfig @relation(fields: [siteId], references: [siteId])
-  sessionId     String   @unique
-  leadId        String?
-  lead          Lead?    @relation(fields: [leadId], references: [id])
-  visitorName   String?
-  visitorEmail  String?
-  visitorPhone  String?
-  status        String   @default("active")
-  isRead        Boolean  @default(false)
-  starred       Boolean  @default(false)
-  lastMessageAt DateTime @default(now())
-  userAgent     String?
-  referrer      String?
-  messages      WebsiteMessage[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  siteId         String
+  site           WebsiteConfig @relation(fields: [siteId], references: [siteId])
+  sessionId      String   @unique
+  leadId         String?
+  lead           Lead?    @relation(fields: [leadId], references: [id])
+  visitorName    String?
+  visitorEmail   String?
+  visitorPhone   String?
+  status         String   @default("active")
+  isRead         Boolean  @default(false)
+  starred        Boolean  @default(false)
+  lastMessageAt  DateTime @default(now())
+  userAgent      String?
+  referrer       String?
+  messages       WebsiteMessage[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  @@map("ca_website_conversations")
+  @@index([organizationId])
   @@index([siteId])
   @@index([sessionId])
   @@index([lastMessageAt])
+  @@map("ca_website_conversations")
 }
 
 model WebsiteMessage {
   id             String   @id @default(cuid())
   conversationId String
   conversation   WebsiteConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           String   // "user" or "assistant"
+  role           String
   content        String
   createdAt      DateTime @default(now())
 
-  @@map("ca_website_messages")
   @@index([conversationId])
+  @@map("ca_website_messages")
 }

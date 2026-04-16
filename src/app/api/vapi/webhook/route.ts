@@ -264,16 +264,49 @@ async function handleEndOfCallReport(message: any) {
   // Try to extract caller name from transcript
   const callerName = extractCallerName(transcript);
 
-  // Find or create lead by phone number
+  // Route to the correct org via the Vapi phone number ID
+  const vapiPhoneNumberId =
+    call.phoneNumberId || call.phoneNumber?.id || null;
+  const dialledNumber =
+    call.phoneNumber?.number ||
+    (typeof call.phoneNumber === "string" ? call.phoneNumber : null) ||
+    null;
+
+  let organizationId: string | null = null;
+  if (vapiPhoneNumberId) {
+    const match = await prisma.phoneNumber.findFirst({
+      where: { vapiPhoneNumberId, channel: "vapi" },
+      select: { organizationId: true },
+    });
+    organizationId = match?.organizationId || null;
+  }
+  if (!organizationId && dialledNumber) {
+    const match = await prisma.phoneNumber.findUnique({
+      where: { number: dialledNumber },
+      select: { organizationId: true },
+    });
+    organizationId = match?.organizationId || null;
+  }
+
+  if (!organizationId) {
+    console.warn(
+      "[VAPI WEBHOOK] No organization mapping found for Vapi call",
+      { vapiPhoneNumberId, dialledNumber }
+    );
+    return;
+  }
+
+  // Find or create lead (scoped to this org)
   let lead = null;
   if (phoneNumber !== "unknown") {
     lead = await prisma.lead.findUnique({
-      where: { phone: phoneNumber },
+      where: { organizationId_phone: { organizationId, phone: phoneNumber } },
     });
 
     if (!lead) {
       lead = await prisma.lead.create({
         data: {
+          organizationId,
           phone: phoneNumber,
           source: "phone",
           ...(callerName ? { name: callerName } : {}),
@@ -281,7 +314,6 @@ async function handleEndOfCallReport(message: any) {
       });
       console.log(`[VAPI WEBHOOK] Created new lead for ${phoneNumber}${callerName ? ` (${callerName})` : ""}`);
     } else if (callerName && !lead.name) {
-      // Update existing lead with the extracted name if it doesn't have one
       lead = await prisma.lead.update({
         where: { id: lead.id },
         data: { name: callerName },
@@ -292,6 +324,7 @@ async function handleEndOfCallReport(message: any) {
 
   await prisma.call.create({
     data: {
+      organizationId,
       vapiCallId: callId,
       phoneNumber,
       status: "completed",

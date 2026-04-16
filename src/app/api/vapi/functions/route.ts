@@ -2,6 +2,40 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { bookCallback, getAvailableSlots } from "@/lib/calendar";
 
+/**
+ * Resolve the organization ID for a Vapi function call by inspecting the
+ * call payload for a Vapi phone number ID or dialled number.
+ */
+async function resolveOrgFromVapiPayload(
+  body: Record<string, unknown>
+): Promise<string | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const call = (body as any).message?.call || (body as any).call;
+  if (!call) return null;
+
+  const vapiPhoneNumberId = call.phoneNumberId || call.phoneNumber?.id || null;
+  if (vapiPhoneNumberId) {
+    const match = await prisma.phoneNumber.findFirst({
+      where: { vapiPhoneNumberId, channel: "vapi" },
+      select: { organizationId: true },
+    });
+    if (match) return match.organizationId;
+  }
+
+  const dialledNumber =
+    call.phoneNumber?.number ||
+    (typeof call.phoneNumber === "string" ? call.phoneNumber : null);
+  if (dialledNumber) {
+    const match = await prisma.phoneNumber.findUnique({
+      where: { number: dialledNumber },
+      select: { organizationId: true },
+    });
+    if (match) return match.organizationId;
+  }
+
+  return null;
+}
+
 // Vapi calls this endpoint when the AI assistant invokes a tool/function
 // Supports both:
 // 1. Server URL webhook format: { message: { type: "function-call", functionCall: { name, parameters } } }
@@ -82,17 +116,26 @@ export async function POST(req: NextRequest) {
 
     console.log(`[VAPI] Executing function: ${name} with params:`, JSON.stringify(parameters));
 
+    const organizationId = await resolveOrgFromVapiPayload(body);
+    if (!organizationId) {
+      console.warn("[VAPI] No org mapping for function call");
+      return NextResponse.json(
+        { results: [{ result: JSON.stringify({ error: "Organization not configured for this phone number" }) }] },
+        { status: 200 }
+      );
+    }
+
     let result: unknown;
 
     switch (name) {
       case "save_customer_details":
-        result = await handleSaveCustomerDetails(parameters as {
+        result = await handleSaveCustomerDetails(organizationId, parameters as {
           name?: string; email?: string; phone?: string;
           company?: string; businessType?: string; issue?: string;
         });
         break;
       case "book_callback":
-        result = await handleBookCallback(parameters as {
+        result = await handleBookCallback(organizationId, parameters as {
           date: string; time?: string; assignedTo?: string;
           notes?: string; customerPhone: string; customerName?: string;
         });
@@ -103,7 +146,7 @@ export async function POST(req: NextRequest) {
         });
         break;
       case "transfer_call":
-        result = await handleTransferCall(parameters as {
+        result = await handleTransferCall(organizationId, parameters as {
           teamMember?: string; reason?: string;
         });
         break;
@@ -131,14 +174,17 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function handleSaveCustomerDetails(params: {
-  name?: string;
-  email?: string;
-  phone?: string;
-  company?: string;
-  businessType?: string;
-  issue?: string;
-}) {
+async function handleSaveCustomerDetails(
+  organizationId: string,
+  params: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    company?: string;
+    businessType?: string;
+    issue?: string;
+  }
+) {
   const { name, email, phone, company, businessType, issue } = params;
 
   if (!phone) {
@@ -146,7 +192,7 @@ async function handleSaveCustomerDetails(params: {
   }
 
   const lead = await prisma.lead.upsert({
-    where: { phone },
+    where: { organizationId_phone: { organizationId, phone } },
     update: {
       ...(name && { name }),
       ...(email && { email }),
@@ -154,6 +200,7 @@ async function handleSaveCustomerDetails(params: {
       ...(issue && { issue }),
     },
     create: {
+      organizationId,
       phone,
       name: name || null,
       email: email || null,
@@ -170,21 +217,31 @@ async function handleSaveCustomerDetails(params: {
   };
 }
 
-async function handleBookCallback(params: {
-  date: string;
-  time?: string;
-  assignedTo?: string;
-  notes?: string;
-  customerPhone: string;
-  customerName?: string;
-}) {
+async function handleBookCallback(
+  organizationId: string,
+  params: {
+    date: string;
+    time?: string;
+    assignedTo?: string;
+    notes?: string;
+    customerPhone: string;
+    customerName?: string;
+  }
+) {
   const { date, time, assignedTo, notes, customerPhone, customerName } = params;
 
-  let lead = await prisma.lead.findUnique({ where: { phone: customerPhone } });
+  let lead = await prisma.lead.findUnique({
+    where: { organizationId_phone: { organizationId, phone: customerPhone } },
+  });
 
   if (!lead) {
     lead = await prisma.lead.create({
-      data: { phone: customerPhone, name: customerName || null, source: "phone" },
+      data: {
+        organizationId,
+        phone: customerPhone,
+        name: customerName || null,
+        source: "phone",
+      },
     });
   }
 
@@ -192,7 +249,9 @@ async function handleBookCallback(params: {
 
   let teamMember = assignedTo;
   if (!teamMember) {
-    const settings = await prisma.businessSettings.findUnique({ where: { id: "default" } });
+    const settings = await prisma.organizationSettings.findUnique({
+      where: { organizationId },
+    });
     const members = (settings?.teamMembers as Array<{ name: string }>) || [];
     teamMember = members[0]?.name || "Team";
   }
@@ -211,6 +270,7 @@ async function handleBookCallback(params: {
 
   await prisma.callback.create({
     data: {
+      organizationId,
       leadId: lead.id,
       assignedTo: teamMember,
       scheduledAt,
@@ -254,8 +314,13 @@ async function handleCheckAvailability(params: { date: string; teamMember?: stri
   };
 }
 
-async function handleTransferCall(params: { teamMember?: string; reason?: string }) {
-  const settings = await prisma.businessSettings.findUnique({ where: { id: "default" } });
+async function handleTransferCall(
+  organizationId: string,
+  params: { teamMember?: string; reason?: string }
+) {
+  const settings = await prisma.organizationSettings.findUnique({
+    where: { organizationId },
+  });
   const members = (settings?.teamMembers as Array<{ name: string; phone: string }>) || [];
 
   const member = params.teamMember

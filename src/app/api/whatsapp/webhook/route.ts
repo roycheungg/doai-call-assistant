@@ -36,7 +36,6 @@ export async function POST(request: Request) {
 
   const body = JSON.parse(rawBody);
 
-  // Fire-and-forget - return 200 immediately so Meta doesn't retry
   processWebhook(body).catch((err) =>
     console.error("[WHATSAPP WEBHOOK] Processing error:", err)
   );
@@ -57,13 +56,38 @@ async function processWebhook(body: Record<string, unknown>) {
   const messages = value.messages as Array<Record<string, unknown>>;
   if (!messages || messages.length === 0) return;
 
+  // Route to the right org via the WhatsApp phone number ID
+  const metadata = value.metadata as Record<string, unknown> | undefined;
+  const phoneNumberId =
+    (metadata?.phone_number_id as string) || process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  if (!phoneNumberId) {
+    console.warn("[WHATSAPP WEBHOOK] No phone_number_id in payload");
+    return;
+  }
+
+  const phoneRecord = await prisma.phoneNumber.findFirst({
+    where: { whatsappPhoneNumberId: phoneNumberId, channel: "whatsapp" },
+    select: { organizationId: true },
+  });
+
+  if (!phoneRecord) {
+    console.warn(
+      "[WHATSAPP WEBHOOK] Unrecognised phone_number_id:",
+      phoneNumberId
+    );
+    return;
+  }
+
+  const organizationId = phoneRecord.organizationId;
+
   const contacts = value.contacts as Array<Record<string, unknown>>;
   const contactProfile = contacts?.[0]?.profile as Record<string, unknown>;
   const contactName = (contactProfile?.name as string) || null;
 
   for (const message of messages) {
     try {
-      await processMessage(message, contactName);
+      await processMessage(message, contactName, organizationId);
     } catch (err) {
       console.error("[WHATSAPP WEBHOOK] Error processing message:", err);
     }
@@ -72,7 +96,8 @@ async function processWebhook(body: Record<string, unknown>) {
 
 async function processMessage(
   message: Record<string, unknown>,
-  contactName: string | null
+  contactName: string | null,
+  organizationId: string
 ) {
   const waId = message.from as string;
   const waMessageId = message.id as string;
@@ -80,7 +105,6 @@ async function processMessage(
 
   if (!waId || !waMessageId) return;
 
-  // Deduplicate - Meta can re-deliver webhooks
   const existing = await prisma.whatsAppMessage.findUnique({
     where: { waMessageId },
   });
@@ -89,7 +113,6 @@ async function processMessage(
     return;
   }
 
-  // Only handle text messages for now
   if (messageType !== "text") {
     await sendTextMessage(
       waId,
@@ -103,17 +126,19 @@ async function processMessage(
 
   const phone = waIdToPhone(waId);
 
-  // Find or create conversation
   let conversation = await prisma.whatsAppConversation.findUnique({
-    where: { waId },
+    where: { organizationId_waId: { organizationId, waId } },
   });
 
   if (!conversation) {
-    // Find or create lead
-    let lead = await prisma.lead.findUnique({ where: { phone } });
+    // Find or create lead (scoped to this org)
+    let lead = await prisma.lead.findUnique({
+      where: { organizationId_phone: { organizationId, phone } },
+    });
     if (!lead) {
       lead = await prisma.lead.create({
         data: {
+          organizationId,
           phone,
           name: contactName,
           source: "whatsapp",
@@ -128,6 +153,7 @@ async function processMessage(
 
     conversation = await prisma.whatsAppConversation.create({
       data: {
+        organizationId,
         waId,
         phoneNumber: phone,
         contactName,
@@ -141,7 +167,6 @@ async function processMessage(
     });
   }
 
-  // Store user message
   await prisma.whatsAppMessage.create({
     data: {
       conversationId: conversation.id,
@@ -151,7 +176,6 @@ async function processMessage(
     },
   });
 
-  // Load conversation history for Claude context
   const history = await prisma.whatsAppMessage.findMany({
     where: { conversationId: conversation.id },
     orderBy: { createdAt: "asc" },
@@ -163,14 +187,14 @@ async function processMessage(
     content: m.content,
   }));
 
-  // Get Claude response
-  const systemPrompt = await buildSystemPrompt();
-  const aiResponse = await getChatResponse(chatMessages, systemPrompt);
+  const systemPrompt = await buildSystemPrompt(organizationId);
+  const aiResponse = await getChatResponse(chatMessages, systemPrompt, {
+    organizationId,
+    allowCLI: true,
+  });
 
-  // Send response via WhatsApp
   const sendResult = await sendTextMessage(waId, aiResponse);
 
-  // Store assistant message
   await prisma.whatsAppMessage.create({
     data: {
       conversationId: conversation.id,
@@ -181,12 +205,10 @@ async function processMessage(
     },
   });
 
-  // Update conversation timestamp and mark as unread
   await prisma.whatsAppConversation.update({
     where: { id: conversation.id },
     data: { lastMessageAt: new Date(), isRead: false },
   });
 
-  // Mark incoming message as read (blue ticks)
   markAsRead(waMessageId);
 }

@@ -1,29 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenant, isErrorResponse } from "@/lib/tenant";
 
-export async function GET() {
+const DEFAULT_SETTINGS = {
+  businessName: "Our Business",
+  businessDescription: "",
+  services: [],
+  teamMembers: [],
+  operatingHours: { start: "09:00", end: "17:00", timezone: "Europe/London", days: [1, 2, 3, 4, 5] },
+};
+
+export async function GET(req: NextRequest) {
+  const ctx = await requireTenant(req);
+  if (isErrorResponse(ctx)) return ctx;
+
   try {
-    let settings = await prisma.businessSettings.findUnique({
-      where: { id: "default" },
+    let settings = await prisma.organizationSettings.findUnique({
+      where: { organizationId: ctx.organizationId },
     });
 
     if (!settings) {
-      settings = await prisma.businessSettings.create({
+      const org = await prisma.organization.findUnique({
+        where: { id: ctx.organizationId },
+        select: { name: true },
+      });
+      settings = await prisma.organizationSettings.create({
         data: {
-          id: "default",
-          businessName: "DOAI Systems",
-          businessDescription: "AI-powered technology solutions for businesses",
-          services: [
-            { name: "AI Automation", description: "Custom AI solutions for business processes" },
-            { name: "CRM Systems", description: "Customer relationship management platforms" },
-            { name: "Voice AI", description: "AI-powered call assistants and voice bots" },
-          ],
-          teamMembers: [
-            { name: "Christopher Do", email: "christopher@doaisystems.co.uk", phone: "", role: "admin" },
-            { name: "Roy Cheung", email: "roy@doaisystems.co.uk", phone: "", role: "admin" },
-            { name: "Joe Delima", email: "joe@doaisystems.co.uk", phone: "", role: "member" },
-          ],
-          operatingHours: { start: "09:00", end: "17:00", timezone: "Europe/London", days: [1, 2, 3, 4, 5] },
+          organizationId: ctx.organizationId,
+          businessName: org?.name || DEFAULT_SETTINGS.businessName,
+          businessDescription: DEFAULT_SETTINGS.businessDescription,
+          services: DEFAULT_SETTINGS.services,
+          teamMembers: DEFAULT_SETTINGS.teamMembers,
+          operatingHours: DEFAULT_SETTINGS.operatingHours,
         },
       });
     }
@@ -36,6 +44,9 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
+  const ctx = await requireTenant(req);
+  if (isErrorResponse(ctx)) return ctx;
+
   try {
     const data = await req.json();
 
@@ -43,10 +54,18 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const settings = await prisma.businessSettings.upsert({
-      where: { id: "default" },
+    // Prevent clients from changing their own organizationId
+    delete data.id;
+    delete data.organizationId;
+
+    const settings = await prisma.organizationSettings.upsert({
+      where: { organizationId: ctx.organizationId },
       update: data,
-      create: { id: "default", ...data },
+      create: {
+        organizationId: ctx.organizationId,
+        businessName: data.businessName || DEFAULT_SETTINGS.businessName,
+        ...data,
+      },
     });
 
     return NextResponse.json({ settings });

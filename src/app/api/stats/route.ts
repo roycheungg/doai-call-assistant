@@ -1,7 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenant, isErrorResponse } from "@/lib/tenant";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const ctx = await requireTenant(req);
+  if (isErrorResponse(ctx)) return ctx;
+
   try {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -9,6 +13,7 @@ export async function GET() {
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const orgId = ctx.organizationId;
 
     const [
       totalCalls,
@@ -23,41 +28,40 @@ export async function GET() {
       sentimentCounts,
       callVolumeRaw,
     ] = await Promise.all([
-      prisma.call.count(),
-      prisma.call.count({ where: { createdAt: { gte: todayStart } } }),
-      prisma.call.count({ where: { createdAt: { gte: weekStart } } }),
-      prisma.call.count({ where: { createdAt: { gte: monthStart } } }),
-      prisma.lead.count(),
-      prisma.lead.count({ where: { createdAt: { gte: weekStart } } }),
-      prisma.callback.count({ where: { status: "pending" } }),
-      prisma.call.aggregate({ _avg: { duration: true } }),
+      prisma.call.count({ where: { organizationId: orgId } }),
+      prisma.call.count({ where: { organizationId: orgId, createdAt: { gte: todayStart } } }),
+      prisma.call.count({ where: { organizationId: orgId, createdAt: { gte: weekStart } } }),
+      prisma.call.count({ where: { organizationId: orgId, createdAt: { gte: monthStart } } }),
+      prisma.lead.count({ where: { organizationId: orgId } }),
+      prisma.lead.count({ where: { organizationId: orgId, createdAt: { gte: weekStart } } }),
+      prisma.callback.count({ where: { organizationId: orgId, status: "pending" } }),
+      prisma.call.aggregate({ where: { organizationId: orgId }, _avg: { duration: true } }),
       prisma.call.findMany({
+        where: { organizationId: orgId },
         take: 5,
         orderBy: { createdAt: "desc" },
         include: { lead: true },
       }),
-      // Sentiment distribution
       prisma.call.groupBy({
         by: ["sentiment"],
+        where: { organizationId: orgId },
         _count: { _all: true },
       }),
-      // Call volume last 30 days (raw SQL for DATE grouping)
       prisma.$queryRaw<{ day: string; count: number }[]>`
         SELECT DATE("createdAt")::text as day, COUNT(*)::int as count
         FROM ca_calls
         WHERE "createdAt" > ${thirtyDaysAgo}
+          AND "organizationId" = ${orgId}
         GROUP BY DATE("createdAt")
         ORDER BY day
       `,
     ]);
 
-    // Sentiment distribution
     const sentimentDistribution = sentimentCounts.map((s) => ({
       sentiment: s.sentiment || "unknown",
       count: s._count._all,
     }));
 
-    // Call volume per day (last 30 days)
     const callVolume = (callVolumeRaw || []).map((r) => ({
       day: r.day,
       count: Number(r.count),
