@@ -279,7 +279,7 @@ export default function ConversationsPage() {
       </section>
 
       {/* RIGHT PANEL - Contact details (always visible on xl+) */}
-      <aside className="hidden xl:flex xl:w-80 2xl:w-96 border-l border-white/10 bg-[#161b22] shrink-0">
+      <aside className="hidden xl:flex xl:flex-col xl:w-80 2xl:w-96 border-l border-white/10 bg-[#161b22] shrink-0">
         {activeConversation ? (
           <ContactPanel
             conversation={activeConversation}

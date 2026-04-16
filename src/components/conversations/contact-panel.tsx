@@ -70,7 +70,7 @@ export function ContactPanel({ conversation, onToggleStar }: ContactPanelProps) 
   );
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full w-full flex flex-col">
       {/* Header */}
       <div className="p-4 flex flex-col items-center text-center border-b border-white/10">
         <div
