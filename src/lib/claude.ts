@@ -87,16 +87,22 @@ async function getChatResponseCLI(
 ): Promise<string> {
   const prompt = formatPromptForCLI(messages, systemPrompt);
 
+  // On Windows, execFile doesn't resolve .exe/.cmd via PATHEXT unless shell is used.
+  // Pass the explicit extension so the binary is found on both platforms.
+  const binary = process.platform === "win32" ? "claude.exe" : "claude";
+
   return new Promise((resolve) => {
     execFile(
-      "claude",
+      binary,
       ["-p", "--output-format", "text", prompt],
       { timeout: 60_000, maxBuffer: 1024 * 1024 },
       (error, stdout, stderr) => {
         if (error) {
           console.error("[CLAUDE CLI] Error:", error.message);
           if (stderr) console.error("[CLAUDE CLI] Stderr:", stderr);
-          resolve("Sorry, I was unable to generate a response right now. Please try again.");
+          resolve(
+            "Sorry, I was unable to generate a response right now. Please try again."
+          );
           return;
         }
         const response = stdout.trim();
