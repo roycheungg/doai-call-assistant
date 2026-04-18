@@ -8,6 +8,12 @@ import { NextResponse, type NextRequest } from "next/server";
  * the actual session validation to route handlers via requireTenant().
  */
 export function middleware(req: NextRequest) {
+  // Dev-only bypass for local preview with no real session.
+  // Guarded by an env var that is only set in .env.local (gitignored).
+  if (process.env.DEV_BYPASS_AUTH === "1") {
+    return NextResponse.next();
+  }
+
   const { pathname } = req.nextUrl;
 
   // Public routes - no auth required

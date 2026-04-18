@@ -1,22 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+DOAI Call Assistant — multi-tenant CRM for voice (Vapi), WhatsApp, and embeddable website chatbots.
 
-## Getting Started
+## Local development
 
-First, run the development server:
+Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) and Node.js 22+.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# First time setup
+cp .env.local.example .env.local   # fills in DATABASE_URL + dev auth bypass
+npm install
+npm run db:up                       # starts Postgres in Docker
+npm run dev:setup                   # pushes schema + seeds sample data
+
+# Every time after that
+npm run db:up                       # if not already running
+npm run dev                         # http://localhost:4500
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+With `DEV_BYPASS_AUTH=1` in `.env.local` (set by the example), you are auto-signed-in as the seeded super-admin and can navigate everything without a real session.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Reset the local DB and re-seed:
+```bash
+npm run dev:reset
+```
+
+## Tech stack
+
+- Next.js 16 + React 19
+- Prisma 7 + PostgreSQL
+- NextAuth v5 (Credentials + JWT sessions)
+- Tailwind 4 + shadcn/ui
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 

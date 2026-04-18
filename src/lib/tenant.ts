@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 
 export type TenantRole = "member" | "admin" | "superAdmin";
 
@@ -8,9 +9,31 @@ export type TenantContext = {
   organizationId: string;
   role: TenantRole;
   isSuperAdmin: boolean;
-  // If the super-admin is viewing another org via ?asOrg, this is that target org.
-  // Otherwise it's the user's own org.
 };
+
+/**
+ * Local dev escape hatch — when DEV_BYPASS_AUTH=1 is set (via .env.local),
+ * skip real session lookups and return a mock super-admin context pointing
+ * at the seeded DOAI org. Only activates if that org exists in the DB.
+ */
+async function devBypassTenant(
+  req: Request
+): Promise<TenantContext | null> {
+  if (process.env.DEV_BYPASS_AUTH !== "1") return null;
+  const org = await prisma.organization.findUnique({
+    where: { slug: "doai" },
+    select: { id: true },
+  });
+  if (!org) return null;
+  const url = new URL(req.url);
+  const asOrg = url.searchParams.get("asOrg");
+  return {
+    userId: "dev-user",
+    organizationId: asOrg || org.id,
+    role: "superAdmin",
+    isSuperAdmin: true,
+  };
+}
 
 /**
  * Require a valid session and resolve the target organizationId.
@@ -25,6 +48,9 @@ export type TenantContext = {
 export async function requireTenant(
   req: Request
 ): Promise<TenantContext | NextResponse> {
+  const dev = await devBypassTenant(req);
+  if (dev) return dev;
+
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -70,6 +96,10 @@ export function isErrorResponse(x: unknown): x is NextResponse {
 export async function requireSuperAdmin(): Promise<
   { userId: string; role: "superAdmin" } | NextResponse
 > {
+  if (process.env.DEV_BYPASS_AUTH === "1") {
+    return { userId: "dev-user", role: "superAdmin" };
+  }
+
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
