@@ -94,7 +94,9 @@ export function Sidebar() {
           </div>
           <div className="min-w-0">
             <h1 className="font-semibold text-sm tracking-tight truncate">
-              {activeOrg?.name || "Call Assistant"}
+              {activeOrg?.name ||
+                session?.user?.organizationName ||
+                "Call Assistant"}
             </h1>
             <p className="text-xs text-slate-500">
               {isSuperAdmin && asOrg ? "viewing as super-admin" : "AI CRM"}

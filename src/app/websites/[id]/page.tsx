@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Save, Trash2, Copy, Check, Lock } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Copy, Check } from "lucide-react";
 
 interface Site {
   id: string;
@@ -302,49 +302,34 @@ export default function WebsiteEditPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              System Prompt
-              {!isSuperAdmin && (
-                <Lock className="w-3.5 h-3.5 text-slate-500" />
-              )}
-            </span>
-            <Badge variant="outline" className="text-[10px]">
-              {site.systemPrompt.length} chars
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            value={site.systemPrompt}
-            onChange={(e) =>
-              setSite({ ...site, systemPrompt: e.target.value })
-            }
-            rows={20}
-            readOnly={!isSuperAdmin}
-            className={`font-mono text-xs ${
-              !isSuperAdmin ? "opacity-70 cursor-not-allowed" : ""
-            }`}
-          />
-          <p className="text-xs text-muted-foreground mt-2">
-            {isSuperAdmin ? (
-              <>
-                Tip: Include a lead capture instruction like &quot;When the
-                visitor provides their name, email, and phone, append [LEAD:
-                {"{"}&quot;name&quot;:...,&quot;email&quot;:...,&quot;phone&quot;:...{"}"}] at the end of your
-                message.&quot;
-              </>
-            ) : (
-              <>
-                The system prompt is managed by your DOAI account manager.
-                Contact support to request changes.
-              </>
-            )}
-          </p>
-        </CardContent>
-      </Card>
+      {isSuperAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center justify-between">
+              <span>System Prompt</span>
+              <Badge variant="outline" className="text-[10px]">
+                {site.systemPrompt.length} chars
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              value={site.systemPrompt}
+              onChange={(e) =>
+                setSite({ ...site, systemPrompt: e.target.value })
+              }
+              rows={20}
+              className="font-mono text-xs"
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              Tip: Include a lead capture instruction like &quot;When the
+              visitor provides their name, email, and phone, append [LEAD:
+              {"{"}&quot;name&quot;:...,&quot;email&quot;:...,&quot;phone&quot;:...{"}"}] at the end of your
+              message.&quot;
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

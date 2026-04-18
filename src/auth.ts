@@ -27,6 +27,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             passwordHash: true,
             organizationId: true,
             role: true,
+            organization: { select: { name: true } },
           },
         });
         if (!user?.passwordHash) return null;
@@ -39,6 +40,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           name: user.name,
           organizationId: user.organizationId,
+          organizationName: user.organization?.name || null,
           role: user.role,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any;
@@ -50,10 +52,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         const u = user as typeof user & {
           organizationId?: string | null;
+          organizationName?: string | null;
           role?: string;
         };
         token.userId = u.id;
         token.organizationId = u.organizationId || null;
+        token.organizationName = u.organizationName || null;
         token.role = u.role || "member";
       }
       return token;
@@ -65,6 +69,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           ...session.user,
           id: (token.userId as string) || session.user.id,
           organizationId: (token.organizationId as string | null) || null,
+          organizationName:
+            (token.organizationName as string | null) || null,
           role:
             (token.role as "member" | "admin" | "superAdmin") || "member",
         },
