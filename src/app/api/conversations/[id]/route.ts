@@ -48,6 +48,34 @@ export async function GET(
       });
     }
 
+    if (channel === "instagram" || channel === "facebook") {
+      const conv = await prisma.socialConversation.findUnique({
+        where: { id },
+        include: {
+          lead: true,
+          messages: { orderBy: { createdAt: "asc" } },
+        },
+      });
+
+      if (!conv || conv.organizationId !== ctx.organizationId) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+
+      return NextResponse.json({
+        id: conv.id,
+        channel: conv.channel,
+        contactName: conv.contactName,
+        phoneNumber: conv.externalUserId, // display the IG/FB handle-equivalent
+        status: conv.status,
+        isRead: conv.isRead,
+        starred: conv.starred,
+        createdAt: conv.createdAt,
+        lastMessageAt: conv.lastMessageAt,
+        lead: conv.lead,
+        messages: conv.messages,
+      });
+    }
+
     const conversation = await prisma.whatsAppConversation.findUnique({
       where: { id },
       include: {

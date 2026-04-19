@@ -4,9 +4,9 @@ import { requireTenant, isErrorResponse } from "@/lib/tenant";
 
 type NormalizedConversation = {
   id: string;
-  channel: "whatsapp" | "website";
+  channel: "whatsapp" | "website" | "instagram" | "facebook";
   contactName: string | null;
-  identifier: string; // phone or siteId+sessionId
+  identifier: string; // phone, siteId+sessionId, IG scoped id, or Messenger PSID
   lastMessage: string | null;
   lastMessageAt: string;
   isRead: boolean;
@@ -57,6 +57,7 @@ export async function GET(req: NextRequest) {
     const results: NormalizedConversation[] = [];
     let waTotal = 0;
     let webTotal = 0;
+    let socialTotal = 0;
 
     // WhatsApp conversations
     if (channel === "all" || channel === "whatsapp") {
@@ -158,6 +159,64 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Social conversations (Instagram + Facebook Messenger)
+    const wantInstagram = channel === "all" || channel === "instagram";
+    const wantFacebook = channel === "all" || channel === "facebook";
+    if (wantInstagram || wantFacebook) {
+      const channelFilter =
+        wantInstagram && wantFacebook
+          ? { in: ["instagram", "facebook"] as string[] }
+          : wantInstagram
+          ? "instagram"
+          : "facebook";
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const socialWhere: any = { ...baseWhere, channel: channelFilter };
+      if (search) {
+        socialWhere.OR = [
+          { contactName: { contains: search, mode: "insensitive" } },
+          { externalUserId: { contains: search } },
+          { lead: { name: { contains: search, mode: "insensitive" } } },
+        ];
+      }
+
+      const [socialConvs, socialCount] = await Promise.all([
+        prisma.socialConversation.findMany({
+          where: socialWhere,
+          include: {
+            lead: { select: { id: true, name: true, company: true } },
+            _count: { select: { messages: true } },
+            messages: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { content: true },
+            },
+          },
+          orderBy: { lastMessageAt: "desc" },
+          take: perChannelTake,
+        }),
+        prisma.socialConversation.count({ where: socialWhere }),
+      ]);
+      socialTotal = socialCount;
+
+      for (const c of socialConvs) {
+        results.push({
+          id: c.id,
+          channel: c.channel as "instagram" | "facebook",
+          contactName: c.contactName || c.lead?.name || null,
+          identifier: c.externalUserId,
+          lastMessage: c.messages[0]?.content || null,
+          lastMessageAt: c.lastMessageAt.toISOString(),
+          isRead: c.isRead,
+          starred: c.starred,
+          status: c.status,
+          createdAt: c.createdAt.toISOString(),
+          messageCount: c._count.messages,
+          lead: c.lead,
+        });
+      }
+    }
+
     // Sort merged results by lastMessageAt desc
     results.sort(
       (a, b) =>
@@ -165,7 +224,7 @@ export async function GET(req: NextRequest) {
         new Date(a.lastMessageAt).getTime()
     );
 
-    const total = waTotal + webTotal;
+    const total = waTotal + webTotal + socialTotal;
     const start = (page - 1) * limit;
     const conversations = results.slice(start, start + limit);
 

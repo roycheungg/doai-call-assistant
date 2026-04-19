@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { apiFetch } from "@/lib/api-fetch";
 
-type FeatureKey = "voice" | "chatbot" | "whatsapp" | null;
+type FeatureKey = "voice" | "chatbot" | "whatsapp" | "instagram" | "facebook" | null;
 
 const navItems: Array<{
   href: string;
@@ -41,7 +41,7 @@ const navItems: Array<{
     href: "/conversations",
     label: "Conversations",
     icon: MessageCircle,
-    requires: ["chatbot", "whatsapp"],
+    requires: ["chatbot", "whatsapp", "instagram", "facebook"],
   },
   { href: "/websites", label: "Websites", icon: Globe, requires: "chatbot" },
   { href: "/leads", label: "Leads", icon: Users },
@@ -74,6 +74,8 @@ export function Sidebar() {
     chatbotEnabled: boolean;
     whatsappEnabled: boolean;
     voiceEnabled: boolean;
+    instagramEnabled: boolean;
+    facebookEnabled: boolean;
   } | null>(null);
 
   // Super-admins: load all orgs for the switcher
@@ -105,6 +107,8 @@ export function Sidebar() {
           chatbotEnabled: !!d.settings.chatbotEnabled,
           whatsappEnabled: !!d.settings.whatsappEnabled,
           voiceEnabled: !!d.settings.voiceEnabled,
+          instagramEnabled: !!d.settings.instagramEnabled,
+          facebookEnabled: !!d.settings.facebookEnabled,
         });
       })
       .catch(() => {});
@@ -272,6 +276,8 @@ type Flags = {
   chatbotEnabled: boolean;
   whatsappEnabled: boolean;
   voiceEnabled: boolean;
+  instagramEnabled: boolean;
+  facebookEnabled: boolean;
 };
 
 function isNavVisible(item: NavItem, features: Flags | null): boolean {
@@ -286,6 +292,8 @@ function isNavVisible(item: NavItem, features: Flags | null): boolean {
     if (r === "chatbot") return features.chatbotEnabled;
     if (r === "whatsapp") return features.whatsappEnabled;
     if (r === "voice") return features.voiceEnabled;
+    if (r === "instagram") return features.instagramEnabled;
+    if (r === "facebook") return features.facebookEnabled;
     return true;
   });
 }

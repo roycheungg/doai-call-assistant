@@ -30,6 +30,22 @@ export async function PATCH(
       return NextResponse.json(updated);
     }
 
+    if (channel === "instagram" || channel === "facebook") {
+      const existing = await prisma.socialConversation.findUnique({
+        where: { id },
+        select: { organizationId: true },
+      });
+      if (!existing || existing.organizationId !== ctx.organizationId) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      const updated = await prisma.socialConversation.update({
+        where: { id },
+        data: { isRead: true },
+        select: { id: true, isRead: true },
+      });
+      return NextResponse.json(updated);
+    }
+
     const existing = await prisma.whatsAppConversation.findUnique({
       where: { id },
       select: { organizationId: true },

@@ -1,5 +1,14 @@
 import { cn } from "@/lib/utils";
-import { Star, MessageCircle, Globe } from "lucide-react";
+import {
+  Star,
+  MessageCircle,
+  Globe,
+  Camera,
+  Send,
+  type LucideIcon,
+} from "lucide-react";
+
+type Channel = "whatsapp" | "website" | "instagram" | "facebook";
 
 interface ConversationListItemProps {
   id: string;
@@ -10,9 +19,22 @@ interface ConversationListItemProps {
   isRead: boolean;
   starred: boolean;
   isActive: boolean;
-  channel?: "whatsapp" | "website";
+  channel?: Channel;
   onClick: () => void;
 }
+
+// Per-channel badge metadata. Lucide removed Meta's brand icons in 1.x
+// (licensing), so we use evocative generics: Camera for Instagram (the
+// app's original camera icon), Send / paper-plane for Messenger.
+const CHANNEL_BADGE: Record<
+  Channel,
+  { icon: LucideIcon; bg: string; label: string }
+> = {
+  whatsapp: { icon: MessageCircle, bg: "bg-emerald-600", label: "WhatsApp" },
+  website: { icon: Globe, bg: "bg-violet-600", label: "Website chat" },
+  instagram: { icon: Camera, bg: "bg-pink-600", label: "Instagram" },
+  facebook: { icon: Send, bg: "bg-blue-600", label: "Messenger" },
+};
 
 function getInitials(name: string | null, phone: string): string {
   if (name) {
@@ -76,7 +98,8 @@ export function ConversationListItem({
 }: ConversationListItemProps) {
   const initials = getInitials(contactName, phoneNumber);
   const avatarColor = getAvatarColor(contactName, phoneNumber);
-  const ChannelIcon = channel === "website" ? Globe : MessageCircle;
+  const badge = channel ? CHANNEL_BADGE[channel] : null;
+  const ChannelIcon = badge?.icon;
 
   return (
     <button
@@ -97,13 +120,13 @@ export function ConversationListItem({
         >
           {initials}
         </div>
-        {channel && (
+        {badge && ChannelIcon && (
           <div
             className={cn(
               "absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center border border-[#161b22]",
-              channel === "website" ? "bg-violet-600" : "bg-emerald-600"
+              badge.bg
             )}
-            title={channel === "website" ? "Website chat" : "WhatsApp"}
+            title={badge.label}
           >
             <ChannelIcon className="w-2.5 h-2.5 text-white" />
           </div>

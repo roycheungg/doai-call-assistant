@@ -16,7 +16,7 @@ import { ContactPanel } from "@/components/conversations/contact-panel";
 import { MessageBubble } from "@/components/conversations/message-bubble";
 import { apiFetch } from "@/lib/api-fetch";
 
-type Channel = "whatsapp" | "website";
+type Channel = "whatsapp" | "website" | "instagram" | "facebook";
 
 interface ConversationSummary {
   id: string;
@@ -69,7 +69,7 @@ interface ConversationDetail {
 }
 
 type Filter = "all" | "unread" | "recent" | "starred";
-type ChannelFilter = "all" | "whatsapp" | "website";
+type ChannelFilter = "all" | "whatsapp" | "website" | "instagram" | "facebook";
 
 const FILTER_TABS: { value: Filter; label: string }[] = [
   { value: "unread", label: "Unread" },
@@ -82,6 +82,8 @@ const CHANNEL_TABS: { value: ChannelFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "whatsapp", label: "WhatsApp" },
   { value: "website", label: "Website" },
+  { value: "instagram", label: "Instagram" },
+  { value: "facebook", label: "Messenger" },
 ];
 
 export default function ConversationsPage() {
