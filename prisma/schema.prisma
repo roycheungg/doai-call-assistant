@@ -29,6 +29,7 @@ model Organization {
   whatsappConversations WhatsAppConversation[]
   websites              WebsiteConfig[]
   websiteConversations  WebsiteConversation[]
+  socialConversations   SocialConversation[]
   phoneNumbers          PhoneNumber[]
 
   @@map("ca_organizations")
@@ -106,6 +107,18 @@ model OrganizationSettings {
   // via the Vapi function call will also be booked as Cal.com events.
   calComApiKey         String?
   calComEventTypeId    String?
+  // Instagram Direct Messages (Meta Graph API). When enabled, inbound
+  // messages land in /conversations and Claude auto-replies via the
+  // per-org instagramSystemPrompt (fallback: generic prompt).
+  instagramEnabled         Boolean @default(false)
+  instagramSystemPrompt    String?
+  instagramBusinessId      String?
+  instagramAccessToken     String?
+  // Facebook Messenger (Meta Graph API). Same semantics as Instagram.
+  facebookEnabled          Boolean @default(false)
+  facebookSystemPrompt     String?
+  facebookPageId           String?
+  facebookPageAccessToken  String?
   updatedAt            DateTime @updatedAt
 
   @@map("ca_organization_settings")
@@ -168,12 +181,13 @@ model Lead {
   company        String?
   issue          String?
   status         String   @default("new") // new, callback_booked, contacted, resolved, lost
-  source         String   @default("phone") // phone, manual, whatsapp, website
+  source         String   @default("phone") // phone, manual, whatsapp, website, instagram, facebook
   notes          String?
   calls          Call[]
   callbacks      Callback[]
   whatsappConversations WhatsAppConversation[]
   websiteConversations  WebsiteConversation[]
+  socialConversations   SocialConversation[]
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -318,4 +332,53 @@ model WebsiteMessage {
 
   @@index([conversationId])
   @@map("ca_website_messages")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Social messaging (Instagram DMs + Facebook Messenger)
+//
+// Unified pair for channels that ride Meta's Graph API but aren't
+// WhatsApp. `channel` column distinguishes them ("instagram" | "facebook")
+// and the table shape is extensible to future social channels (Twitter
+// DMs, etc.) without further schema changes. WhatsApp keeps its own
+// tables — those already work and migrating them is out of scope.
+// ─────────────────────────────────────────────────────────────
+
+model SocialConversation {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel        String   // "instagram" | "facebook"
+  externalUserId String   // IG scoped user id OR Messenger PSID
+  contactName    String?
+  leadId         String?
+  lead           Lead?    @relation(fields: [leadId], references: [id])
+  status         String   @default("active")
+  isRead         Boolean  @default(false)
+  starred        Boolean  @default(false)
+  lastMessageAt  DateTime @default(now())
+  messages       SocialMessage[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, channel, externalUserId])
+  @@index([organizationId])
+  @@index([channel])
+  @@index([lastMessageAt])
+  @@map("ca_social_conversations")
+}
+
+model SocialMessage {
+  id                String   @id @default(cuid())
+  conversationId    String
+  conversation      SocialConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role              String   // "user" | "assistant"
+  content           String
+  externalMessageId String?  @unique
+  status            String   @default("sent")
+  createdAt         DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("ca_social_messages")
 }

@@ -18,6 +18,16 @@ const SUPER_ADMIN_ONLY_FIELDS = [
   "vapiPhoneNumberId",
   "calComApiKey",
   "calComEventTypeId",
+  // Social channels — per-org tokens and system prompts stay behind the
+  // super-admin gate, never mutable by regular tenants.
+  "instagramEnabled",
+  "instagramSystemPrompt",
+  "instagramBusinessId",
+  "instagramAccessToken",
+  "facebookEnabled",
+  "facebookSystemPrompt",
+  "facebookPageId",
+  "facebookPageAccessToken",
 ];
 
 export async function GET(req: NextRequest) {
