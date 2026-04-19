@@ -12,29 +12,47 @@ interface ChatOptions {
   allowCLI?: boolean;
 }
 
+export type MessagingChannel = "whatsapp" | "instagram" | "facebook";
+
+const CHANNEL_LABEL: Record<MessagingChannel, string> = {
+  whatsapp: "WhatsApp",
+  instagram: "Instagram",
+  facebook: "Facebook Messenger",
+};
+
 /**
- * Build a WhatsApp system prompt for an org.
+ * Build a system prompt for an org's messaging channel.
  *
- * Super-admins are expected to set a custom `whatsappSystemPrompt` per org
- * via the admin UI. If it's not set, we fall back to a minimal generic
- * prompt that just mentions the business name. (The old fallback used
- * businessDescription/services/operatingHours, but those have been removed.)
+ * Super-admins set per-channel prompts (`<channel>SystemPrompt`) on the
+ * OrganizationSettings via the admin UI. If unset, we fall back to a
+ * generic prompt that mentions the business name and the channel.
+ *
+ * Defaults to "whatsapp" for backwards-compat with existing callsites.
  */
-export async function buildSystemPrompt(organizationId: string): Promise<string> {
+export async function buildSystemPrompt(
+  organizationId: string,
+  channel: MessagingChannel = "whatsapp"
+): Promise<string> {
   const settings = await prisma.organizationSettings.findUnique({
     where: { organizationId },
   });
 
-  if (settings?.whatsappSystemPrompt) {
-    return settings.whatsappSystemPrompt;
-  }
+  const customPrompt =
+    channel === "whatsapp"
+      ? settings?.whatsappSystemPrompt
+      : channel === "instagram"
+      ? settings?.instagramSystemPrompt
+      : settings?.facebookSystemPrompt;
+
+  if (customPrompt) return customPrompt;
 
   const businessName = settings?.businessName || "Our Business";
+  const label = CHANNEL_LABEL[channel];
 
-  return `You are a helpful WhatsApp assistant for ${businessName}.
+  return `You are a helpful ${label} assistant for ${businessName}.
 
 Guidelines:
-- Be friendly, professional, and concise (WhatsApp messages should be brief).
+- Be friendly, professional, and concise (${label} messages should be brief).
 - Answer what you can. If you can't, say so honestly — don't make up information
   about pricing, availability, or services.
 - If someone needs to speak to a person, let them know the team will follow up.
