@@ -26,8 +26,43 @@ jobs:
       - name: Build
         run: npm run build
 
-  deploy:
+  # Sync the Prisma schema to prod BEFORE the service restarts. Runs the
+  # additive-migration pattern: new nullable columns land in the DB first,
+  # then the deploy job ships code that reads them.
+  #
+  # Only touches prisma/schema.prisma on disk — the running service keeps
+  # using its current code + client until the deploy job rebuilds and
+  # restarts. `prisma db push` is idempotent, so every deploy runs it
+  # even when there's no schema delta (it's a ~100ms no-op).
+  #
+  # Additive-only contract: safe for ADD COLUMN / loosening NOT NULL.
+  # DROP COLUMN / tightening NOT NULL would break the running service
+  # between the migrate and deploy steps — for those, do a two-commit
+  # dance (stop-reading → drop).
+  migrate:
     needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync Prisma schema to prod DB
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          command_timeout: 5m
+          script: |
+            set -e
+            cd /home/kaia/doai/call-assistant
+            git fetch origin master
+            # Pull only the schema onto disk — leave the rest of the
+            # working tree alone so the running service is unaffected.
+            git checkout origin/master -- prisma/schema.prisma
+            DATABASE_URL="${{ secrets.PROD_DATABASE_URL }}" \
+              npx prisma db push --skip-generate
+
+  deploy:
+    needs: migrate
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
