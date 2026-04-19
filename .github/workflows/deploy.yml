@@ -53,13 +53,21 @@ jobs:
           command_timeout: 5m
           script: |
             set -e
+            # Repo is owned by user `kaia`; SSH login is `roy`. Wrap in sudo
+            # so git + prisma can touch the working tree (matches the deploy
+            # step's `sudo bash deploy-call-assistant.sh` pattern).
+            sudo bash <<'REMOTESCRIPT'
+            set -e
             cd /home/kaia/doai/call-assistant
             git fetch origin master
             # Pull only the schema onto disk — leave the rest of the
             # working tree alone so the running service is unaffected.
             git checkout origin/master -- prisma/schema.prisma
-            DATABASE_URL="${{ secrets.PROD_DATABASE_URL }}" \
-              npx prisma db push --skip-generate
+            # --url overrides DATABASE_URL from prisma.config.ts. Prisma 7
+            # removed --skip-generate; the deploy step re-runs `prisma
+            # generate` anyway so we don't need to here.
+            npx prisma db push --url="${{ secrets.PROD_DATABASE_URL }}"
+            REMOTESCRIPT
 
   deploy:
     needs: migrate
