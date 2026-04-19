@@ -52,22 +52,6 @@ async function main() {
         id: DOAI_SETTINGS_ID,
         organizationId: org.id,
         businessName: "DOAI Systems",
-        businessDescription:
-          "AI-powered automation for small businesses - voice agents, chatbots, CRM",
-        services: [
-          {
-            name: "Voice Agent",
-            description: "AI receptionist for inbound calls",
-          },
-          {
-            name: "Chat Agent",
-            description: "WhatsApp + website chatbots with lead capture",
-          },
-          {
-            name: "CRM Setup",
-            description: "Lead pipeline + automation",
-          },
-        ],
         teamMembers: [
           {
             name: "Roy Cheung",
@@ -76,12 +60,6 @@ async function main() {
             role: "admin",
           },
         ],
-        operatingHours: {
-          start: "09:00",
-          end: "17:00",
-          timezone: "Europe/London",
-          days: [1, 2, 3, 4, 5],
-        },
         whatsappEnabled: true,
         chatbotEnabled: true,
         voiceEnabled: true,

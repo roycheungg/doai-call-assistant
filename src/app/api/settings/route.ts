@@ -4,10 +4,7 @@ import { requireTenant, isErrorResponse } from "@/lib/tenant";
 
 const DEFAULT_SETTINGS = {
   businessName: "Our Business",
-  businessDescription: "",
-  services: [],
   teamMembers: [],
-  operatingHours: { start: "09:00", end: "17:00", timezone: "Europe/London", days: [1, 2, 3, 4, 5] },
 };
 
 // Fields only super-admins can change. Non-super-admins attempting to set
@@ -39,10 +36,7 @@ export async function GET(req: NextRequest) {
         data: {
           organizationId: ctx.organizationId,
           businessName: org?.name || DEFAULT_SETTINGS.businessName,
-          businessDescription: DEFAULT_SETTINGS.businessDescription,
-          services: DEFAULT_SETTINGS.services,
           teamMembers: DEFAULT_SETTINGS.teamMembers,
-          operatingHours: DEFAULT_SETTINGS.operatingHours,
         },
       });
     }

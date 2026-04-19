@@ -3,10 +3,9 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Save, Plus, Trash2, Building2, Users, Clock } from "lucide-react";
+import { Save, Plus, Trash2, Building2, Users } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 
 interface TeamMember {
@@ -16,17 +15,9 @@ interface TeamMember {
   role: string;
 }
 
-interface Service {
-  name: string;
-  description: string;
-}
-
 interface Settings {
   businessName: string;
-  businessDescription: string;
-  services: Service[];
   teamMembers: TeamMember[];
-  operatingHours: { start: string; end: string; timezone: string; days: number[] };
 }
 
 export default function SettingsPage() {
@@ -39,7 +30,10 @@ export default function SettingsPage() {
       try {
         const res = await apiFetch("/api/settings");
         const data = await res.json();
-        setSettings(data.settings);
+        setSettings({
+          businessName: data.settings?.businessName || "",
+          teamMembers: data.settings?.teamMembers || [],
+        });
       } catch (error) {
         console.error("Failed to fetch settings:", error);
       } finally {
@@ -79,7 +73,7 @@ export default function SettingsPage() {
         <div>
           <h1 className="text-2xl font-bold">Settings</h1>
           <p className="text-muted-foreground mt-1">
-            Configure your AI call assistant
+            Your organization profile
           </p>
         </div>
         <Button onClick={handleSave} disabled={saving}>
@@ -101,78 +95,12 @@ export default function SettingsPage() {
             <label className="text-sm font-medium">Business Name</label>
             <Input
               value={settings.businessName}
-              onChange={(e) => setSettings({ ...settings, businessName: e.target.value })}
+              onChange={(e) =>
+                setSettings({ ...settings, businessName: e.target.value })
+              }
               className="mt-1"
             />
           </div>
-          <div>
-            <label className="text-sm font-medium">Business Description</label>
-            <Textarea
-              value={settings.businessDescription}
-              onChange={(e) => setSettings({ ...settings, businessDescription: e.target.value })}
-              className="mt-1"
-              rows={3}
-              placeholder="Describe what your business does. The AI will use this to explain your services to callers."
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Services */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Services</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {settings.services.map((service, i) => (
-            <div key={i} className="flex gap-3 items-start">
-              <div className="flex-1 space-y-2">
-                <Input
-                  value={service.name}
-                  onChange={(e) => {
-                    const updated = [...settings.services];
-                    updated[i] = { ...updated[i], name: e.target.value };
-                    setSettings({ ...settings, services: updated });
-                  }}
-                  placeholder="Service name"
-                />
-                <Input
-                  value={service.description}
-                  onChange={(e) => {
-                    const updated = [...settings.services];
-                    updated[i] = { ...updated[i], description: e.target.value };
-                    setSettings({ ...settings, services: updated });
-                  }}
-                  placeholder="Brief description"
-                />
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-1"
-                onClick={() => {
-                  setSettings({
-                    ...settings,
-                    services: settings.services.filter((_, idx) => idx !== i),
-                  });
-                }}
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </div>
-          ))}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setSettings({
-                ...settings,
-                services: [...settings.services, { name: "", description: "" }],
-              })
-            }
-          >
-            <Plus className="w-4 h-4 mr-1" /> Add Service
-          </Button>
         </CardContent>
       </Card>
 
@@ -186,7 +114,10 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           {settings.teamMembers.map((member, i) => (
-            <div key={i} className="flex gap-3 items-start p-3 border rounded-lg">
+            <div
+              key={i}
+              className="flex gap-3 items-start p-3 border rounded-lg"
+            >
               <div className="flex-1 grid grid-cols-2 gap-2">
                 <Input
                   value={member.name}
@@ -225,7 +156,9 @@ export default function SettingsPage() {
                 onClick={() => {
                   setSettings({
                     ...settings,
-                    teamMembers: settings.teamMembers.filter((_, idx) => idx !== i),
+                    teamMembers: settings.teamMembers.filter(
+                      (_, idx) => idx !== i
+                    ),
                   });
                 }}
               >
@@ -248,54 +181,12 @@ export default function SettingsPage() {
           >
             <Plus className="w-4 h-4 mr-1" /> Add Team Member
           </Button>
-        </CardContent>
-      </Card>
-
-      {/* Operating Hours */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Clock className="w-5 h-5" />
-            Operating Hours
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium">Start Time</label>
-              <Input
-                type="time"
-                value={settings.operatingHours.start}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    operatingHours: { ...settings.operatingHours, start: e.target.value },
-                  })
-                }
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">End Time</label>
-              <Input
-                type="time"
-                value={settings.operatingHours.end}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    operatingHours: { ...settings.operatingHours, end: e.target.value },
-                  })
-                }
-                className="mt-1"
-              />
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            The AI assistant answers calls 24/7, but uses these hours to know when team members are available for transfers.
+          <p className="text-xs text-muted-foreground mt-2">
+            Team members&apos; phone numbers are used by the voice agent when a
+            caller asks to be transferred to a human.
           </p>
         </CardContent>
       </Card>
-
     </div>
   );
 }

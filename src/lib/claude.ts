@@ -13,8 +13,12 @@ interface ChatOptions {
 }
 
 /**
- * Build a WhatsApp system prompt from an org's settings.
- * Falls back to a generic template if the org has no custom prompt.
+ * Build a WhatsApp system prompt for an org.
+ *
+ * Super-admins are expected to set a custom `whatsappSystemPrompt` per org
+ * via the admin UI. If it's not set, we fall back to a minimal generic
+ * prompt that just mentions the business name. (The old fallback used
+ * businessDescription/services/operatingHours, but those have been removed.)
  */
 export async function buildSystemPrompt(organizationId: string): Promise<string> {
   const settings = await prisma.organizationSettings.findUnique({
@@ -26,40 +30,15 @@ export async function buildSystemPrompt(organizationId: string): Promise<string>
   }
 
   const businessName = settings?.businessName || "Our Business";
-  const description = settings?.businessDescription || "";
-  const services =
-    (settings?.services as Array<{ name: string; description: string }>) || [];
-  const hours = settings?.operatingHours as {
-    start: string;
-    end: string;
-    days: number[];
-  } | null;
-
-  const serviceList =
-    services.length > 0
-      ? services.map((s) => `- ${s.name}: ${s.description}`).join("\n")
-      : "General business inquiries";
-
-  const hoursText =
-    hours?.start && hours?.end
-      ? `${hours.start} to ${hours.end}`
-      : "Standard business hours";
 
   return `You are a helpful WhatsApp assistant for ${businessName}.
-${description ? `\nAbout the business: ${description}` : ""}
-
-Services offered:
-${serviceList}
-
-Operating hours: ${hoursText}
 
 Guidelines:
-- Be friendly, professional, and concise (WhatsApp messages should be brief)
-- Help answer questions about the business and its services
-- If someone needs to speak to a person, let them know the team will follow up
-- If you cannot answer a question, say so honestly
-- Do not make up information about pricing or availability unless specified above
-- Keep responses under 500 words as these are WhatsApp messages`;
+- Be friendly, professional, and concise (WhatsApp messages should be brief).
+- Answer what you can. If you can't, say so honestly — don't make up information
+  about pricing, availability, or services.
+- If someone needs to speak to a person, let them know the team will follow up.
+- Keep responses under 500 words.`;
 }
 
 // --- Claude Code CLI method (Max plan, local testing only) ---

@@ -95,10 +95,7 @@ model OrganizationSettings {
   organizationId       String   @unique
   organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   businessName         String
-  businessDescription  String   @default("")
-  services             Json     @default("[]")
   teamMembers          Json     @default("[]")
-  operatingHours       Json     @default("{}")
   vapiAssistantId      String?
   vapiPhoneNumberId    String?
   whatsappSystemPrompt String?
