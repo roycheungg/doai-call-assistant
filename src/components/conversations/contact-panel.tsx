@@ -1,9 +1,11 @@
+import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Star, Phone, Mail, Building2, Calendar, MessageCircle } from "lucide-react";
+import { Star, Phone, Mail, Building2, Calendar, MessageCircle, AtSign } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { avatarColorFor, initialsFor } from "@/lib/channels";
 
 interface ContactPanelProps {
   conversation: {
@@ -13,6 +15,10 @@ interface ContactPanelProps {
     status: string;
     starred: boolean;
     createdAt: string;
+    /** Profile-pic URL fetched from Graph API (IG/FB only). */
+    profilePicUrl?: string | null;
+    /** IG @username (no FB equivalent). */
+    handle?: string | null;
     lead: {
       id: string;
       name: string | null;
@@ -26,62 +32,44 @@ interface ContactPanelProps {
   onToggleStar: () => void;
 }
 
-function getInitials(name: string | null, phone: string): string {
-  if (name) {
-    return name
-      .split(" ")
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  }
-  return phone.slice(-2);
-}
-
-function getAvatarColor(name: string | null, phone: string): string {
-  const str = name || phone;
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const colors = [
-    "bg-blue-600",
-    "bg-emerald-600",
-    "bg-purple-600",
-    "bg-amber-600",
-    "bg-rose-600",
-    "bg-cyan-600",
-  ];
-  return colors[Math.abs(hash) % colors.length];
-}
-
 export function ContactPanel({ conversation, onToggleStar }: ContactPanelProps) {
-  const displayName =
-    conversation.contactName ||
-    conversation.lead?.name ||
-    conversation.phoneNumber;
-  const initials = getInitials(
-    conversation.contactName || conversation.lead?.name || null,
-    conversation.phoneNumber
-  );
-  const avatarColor = getAvatarColor(
-    conversation.contactName,
-    conversation.phoneNumber
+  const nameForDisplay =
+    conversation.contactName || conversation.lead?.name || null;
+  const displayName = nameForDisplay || conversation.phoneNumber;
+  const initials = initialsFor(nameForDisplay, conversation.phoneNumber);
+  const avatarColor = avatarColorFor(
+    nameForDisplay || conversation.phoneNumber
   );
 
   return (
     <div className="h-full w-full flex flex-col">
       {/* Header */}
       <div className="p-4 flex flex-col items-center text-center border-b border-white/10">
-        <div
-          className={cn(
-            "w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-semibold mb-3",
-            avatarColor
-          )}
-        >
-          {initials}
-        </div>
+        {conversation.profilePicUrl ? (
+          <Image
+            src={conversation.profilePicUrl}
+            alt={displayName}
+            width={64}
+            height={64}
+            className="w-16 h-16 rounded-full object-cover mb-3"
+            unoptimized
+          />
+        ) : (
+          <div
+            className={cn(
+              "w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-semibold mb-3",
+              avatarColor
+            )}
+          >
+            {initials}
+          </div>
+        )}
         <h3 className="font-semibold text-white">{displayName}</h3>
+        {conversation.handle && (
+          <p className="text-xs text-slate-400 mt-0.5">
+            @{conversation.handle}
+          </p>
+        )}
         <p className="text-xs text-slate-500 mt-0.5">
           {conversation.phoneNumber}
         </p>
@@ -120,6 +108,12 @@ export function ContactPanel({ conversation, onToggleStar }: ContactPanelProps) 
             Contact
           </h4>
           <div className="space-y-2.5">
+            {conversation.handle && (
+              <div className="flex items-center gap-2.5 text-sm">
+                <AtSign className="w-3.5 h-3.5 text-slate-500" />
+                <span className="text-slate-300">{conversation.handle}</span>
+              </div>
+            )}
             <div className="flex items-center gap-2.5 text-sm">
               <Phone className="w-3.5 h-3.5 text-slate-500" />
               <span className="text-slate-300">{conversation.phoneNumber}</span>

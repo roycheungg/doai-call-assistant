@@ -73,6 +73,8 @@ export async function GET(
         lastMessageAt: conv.lastMessageAt,
         lead: conv.lead,
         messages: conv.messages,
+        profilePicUrl: conv.profilePicUrl,
+        handle: conv.contactHandle,
       });
     }
 

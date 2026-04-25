@@ -20,6 +20,11 @@ type NormalizedConversation = {
     company: string | null;
   } | null;
   siteName?: string;
+  // Social-channel profile data, populated for IG/FB only.
+  // Used by the conversation list + contact panel to render avatars
+  // and @handles instead of an opaque externalUserId.
+  profilePicUrl?: string | null;
+  handle?: string | null;
 };
 
 export async function GET(req: NextRequest) {
@@ -213,6 +218,8 @@ export async function GET(req: NextRequest) {
           createdAt: c.createdAt.toISOString(),
           messageCount: c._count.messages,
           lead: c.lead,
+          profilePicUrl: c.profilePicUrl,
+          handle: c.contactHandle,
         });
       }
     }

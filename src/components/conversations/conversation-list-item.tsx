@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Star } from "lucide-react";
 import {
@@ -20,6 +21,10 @@ interface ConversationListItemProps {
   starred: boolean;
   isActive: boolean;
   channel?: Channel;
+  /** Profile-pic URL fetched from Graph API (IG/FB only). */
+  profilePicUrl?: string | null;
+  /** IG @username (no FB equivalent). */
+  handle?: string | null;
   onClick: () => void;
 }
 
@@ -50,6 +55,8 @@ export function ConversationListItem({
   starred,
   isActive,
   channel,
+  profilePicUrl,
+  handle,
   onClick,
 }: ConversationListItemProps) {
   const initials = initialsFor(contactName, phoneNumber);
@@ -68,14 +75,25 @@ export function ConversationListItem({
       )}
     >
       <div className="relative shrink-0">
-        <div
-          className={cn(
-            "w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-semibold",
-            avatarColor
-          )}
-        >
-          {initials}
-        </div>
+        {profilePicUrl ? (
+          <Image
+            src={profilePicUrl}
+            alt={contactName || ""}
+            width={40}
+            height={40}
+            className="w-10 h-10 rounded-full object-cover"
+            unoptimized
+          />
+        ) : (
+          <div
+            className={cn(
+              "w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+              avatarColor
+            )}
+          >
+            {initials}
+          </div>
+        )}
         {badge && ChannelIcon && (
           <div
             className={cn(
@@ -103,6 +121,12 @@ export function ConversationListItem({
             {formatRelativeTime(lastMessageAt)}
           </span>
         </div>
+
+        {handle && (
+          <div className="text-[11px] text-slate-500 truncate -mt-0.5">
+            @{handle}
+          </div>
+        )}
 
         <div className="flex items-center gap-1.5 mt-0.5">
           {!isRead && (

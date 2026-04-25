@@ -32,6 +32,11 @@ interface ConversationSummary {
   messageCount: number;
   lead: { id: string; name: string | null; company: string | null } | null;
   siteName?: string;
+  // Social-channel profile data populated by Graph API on first contact
+  // (see src/lib/meta-messaging.ts fetchSocialProfile). Optional / nullable
+  // because non-social channels and senders with strict privacy don't have it.
+  profilePicUrl?: string | null;
+  handle?: string | null;
 }
 
 interface DetailMessage {
@@ -66,6 +71,8 @@ interface ConversationDetail {
     source: string;
   } | null;
   messages: DetailMessage[];
+  profilePicUrl?: string | null;
+  handle?: string | null;
 }
 
 type Filter = "all" | "unread" | "recent" | "starred";
@@ -185,6 +192,8 @@ export default function ConversationsPage() {
         starred: activeConversation.starred,
         createdAt: activeConversation.createdAt,
         lead: activeConversation.lead,
+        profilePicUrl: activeConversation.profilePicUrl,
+        handle: activeConversation.handle,
       }
     : null;
 
@@ -271,6 +280,8 @@ export default function ConversationsPage() {
                 isRead={conv.isRead}
                 starred={conv.starred}
                 isActive={conv.id === selectedId}
+                profilePicUrl={conv.profilePicUrl}
+                handle={conv.handle}
                 onClick={() => selectConversation(conv.id, conv.channel)}
               />
             ))
