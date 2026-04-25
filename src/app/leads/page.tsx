@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,6 +15,26 @@ import {
 import { Users } from "lucide-react";
 import { format } from "date-fns";
 import { apiFetch } from "@/lib/api-fetch";
+import {
+  CHANNEL_META,
+  avatarColorFor,
+  initialsFor,
+  type Channel,
+} from "@/lib/channels";
+import { cn } from "@/lib/utils";
+
+interface SocialContact {
+  channel: "instagram" | "facebook";
+  externalUserId: string;
+  contactName: string | null;
+  handle: string | null;
+  profilePicUrl: string | null;
+}
+
+interface WhatsAppContact {
+  waId: string;
+  contactName: string | null;
+}
 
 interface Lead {
   id: string;
@@ -23,17 +44,99 @@ interface Lead {
   company: string | null;
   issue: string | null;
   status: string;
+  source: string;
   createdAt: string;
   _count: { calls: number; callbacks: number };
+  socialContact: SocialContact | null;
+  whatsappContact: WhatsAppContact | null;
 }
 
-const statusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+const statusColors: Record<
+  string,
+  "default" | "secondary" | "destructive" | "outline"
+> = {
   new: "default",
   callback_booked: "secondary",
   contacted: "outline",
   resolved: "default",
   lost: "destructive",
 };
+
+// Source values stored on Lead → Channel union used by CHANNEL_META.
+function sourceToChannel(source: string): Channel {
+  switch (source) {
+    case "whatsapp":
+      return "whatsapp";
+    case "website":
+      return "website";
+    case "instagram":
+      return "instagram";
+    case "facebook":
+      return "facebook";
+    case "phone":
+    case "manual":
+    default:
+      return "phone";
+  }
+}
+
+/**
+ * Best display name for a lead — prefer Lead.name, fall back to per-channel
+ * contact records, then to "Unknown".
+ *
+ * Older calls produced names with "{{template}}" leftovers from prompt
+ * leakage; treat those as missing.
+ */
+function displayName(lead: Lead): string {
+  const candidates = [
+    lead.name,
+    lead.socialContact?.contactName,
+    lead.whatsappContact?.contactName,
+  ];
+  for (const c of candidates) {
+    if (c && c.trim() && !c.includes("{{")) return c;
+  }
+  return "Unknown";
+}
+
+/**
+ * Human-readable secondary identifier shown under the name in the Contact
+ * cell. Picks the most useful piece of info per channel and falls back to
+ * a friendly placeholder rather than exposing synthetic-phone strings.
+ */
+function displayIdentifier(lead: Lead): string {
+  const channel = sourceToChannel(lead.source);
+
+  if (channel === "instagram") {
+    const handle = lead.socialContact?.handle;
+    return handle ? `@${handle}` : "Instagram user";
+  }
+
+  if (channel === "facebook") {
+    return "Messenger user";
+  }
+
+  if (channel === "website") {
+    if (lead.email) return lead.email;
+    // Synthetic phone for website leads is `website-{sessionId8}` — too
+    // ugly to surface; show the trailing 8 chars only as a thin context.
+    if (lead.phone.startsWith("website-")) {
+      return `Session ${lead.phone.slice(-8)}`;
+    }
+    return lead.phone;
+  }
+
+  // Phone / WhatsApp / manual: phone is the real identifier IF it's a
+  // genuine number rather than a synthetic prefix.
+  if (
+    lead.phone.startsWith("instagram-") ||
+    lead.phone.startsWith("facebook-") ||
+    lead.phone.startsWith("website-")
+  ) {
+    return "—";
+  }
+  return lead.phone;
+}
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -60,7 +163,7 @@ export default function LeadsPage() {
       <div>
         <h1 className="text-2xl font-bold">Leads</h1>
         <p className="text-muted-foreground mt-1">
-          Customer contacts captured by the AI assistant
+          Customer contacts captured across all channels
         </p>
       </div>
 
@@ -69,8 +172,8 @@ export default function LeadsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Phone</TableHead>
+                <TableHead>Contact</TableHead>
+                <TableHead>Channel</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Company</TableHead>
                 <TableHead>Issue</TableHead>
@@ -94,32 +197,112 @@ export default function LeadsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                leads.map((lead) => (
-                  <TableRow key={lead.id}>
-                    <TableCell className="font-medium">
-                      {lead.name && !lead.name.includes("{{") ? lead.name : "Unknown"}
-                    </TableCell>
-                    <TableCell className="text-sm">{lead.phone}</TableCell>
-                    <TableCell className="text-sm">{lead.email || "—"}</TableCell>
-                    <TableCell className="text-sm">{lead.company || "—"}</TableCell>
-                    <TableCell
-                      className={`text-sm text-muted-foreground cursor-pointer ${expandedIssue === lead.id ? "whitespace-normal" : "max-w-xs truncate"}`}
-                      onClick={() => setExpandedIssue(expandedIssue === lead.id ? null : lead.id)}
-                      title={expandedIssue !== lead.id ? "Click to expand" : "Click to collapse"}
-                    >
-                      {lead.issue || "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={statusColors[lead.status] || "outline"} className="text-[10px]">
-                        {lead.status.replace("_", " ")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm">{lead._count.calls}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {format(new Date(lead.createdAt), "MMM d, yyyy")}
-                    </TableCell>
-                  </TableRow>
-                ))
+                leads.map((lead) => {
+                  const name = displayName(lead);
+                  const identifier = displayIdentifier(lead);
+                  const channel = sourceToChannel(lead.source);
+                  const channelMeta = CHANNEL_META[channel];
+                  const ChannelIcon = channelMeta.icon;
+                  const avatarUrl = lead.socialContact?.profilePicUrl || null;
+                  const initials = initialsFor(name === "Unknown" ? null : name, lead.phone);
+                  const avatarColor = avatarColorFor(name + lead.phone);
+                  return (
+                    <TableRow key={lead.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="relative shrink-0">
+                            {avatarUrl ? (
+                              <Image
+                                src={avatarUrl}
+                                alt={name}
+                                width={36}
+                                height={36}
+                                className="w-9 h-9 rounded-full object-cover"
+                                unoptimized
+                              />
+                            ) : (
+                              <div
+                                className={cn(
+                                  "w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                                  avatarColor
+                                )}
+                              >
+                                {initials}
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div
+                              className={cn(
+                                "font-medium truncate",
+                                name === "Unknown" && "text-muted-foreground italic"
+                              )}
+                            >
+                              {name}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {identifier}
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          <div
+                            className={cn(
+                              "w-5 h-5 rounded-full flex items-center justify-center",
+                              channelMeta.bg
+                            )}
+                          >
+                            <ChannelIcon className="w-3 h-3 text-white" />
+                          </div>
+                          <span className="text-xs text-slate-300">
+                            {channelMeta.label}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {lead.email || "—"}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {lead.company || "—"}
+                      </TableCell>
+                      <TableCell
+                        className={`text-sm text-muted-foreground cursor-pointer ${
+                          expandedIssue === lead.id
+                            ? "whitespace-normal"
+                            : "max-w-xs truncate"
+                        }`}
+                        onClick={() =>
+                          setExpandedIssue(
+                            expandedIssue === lead.id ? null : lead.id
+                          )
+                        }
+                        title={
+                          expandedIssue !== lead.id
+                            ? "Click to expand"
+                            : "Click to collapse"
+                        }
+                      >
+                        {lead.issue || "—"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={statusColors[lead.status] || "outline"}
+                          className="text-[10px]"
+                        >
+                          {lead.status.replace("_", " ")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {lead._count.calls}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {format(new Date(lead.createdAt), "MMM d, yyyy")}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

@@ -137,6 +137,89 @@ async function resolveOrgFor(
 }
 
 // ─────────────────────────────────────────────────────────────
+// Profile enrichment — fetch name / handle / avatar on first contact
+// ─────────────────────────────────────────────────────────────
+
+interface SocialProfile {
+  name: string | null;
+  handle: string | null;        // IG @username; FB has no equivalent
+  profilePicUrl: string | null;
+}
+
+const EMPTY_PROFILE: SocialProfile = {
+  name: null,
+  handle: null,
+  profilePicUrl: null,
+};
+
+/**
+ * Fetch the sender's display profile from Graph API the first time we see
+ * them. Cached on the SocialConversation row so subsequent messages don't
+ * pay this cost. Fails closed (returns nulls) — never throws — so a Graph
+ * API outage can't block message ingestion.
+ *
+ * Endpoint differs by channel: Instagram uses graph.instagram.com (paired
+ * with the IGAA Bearer token); Facebook Messenger uses graph.facebook.com
+ * with the Page access token.
+ */
+async function fetchSocialProfile(
+  channel: SocialChannel,
+  ctx: OrgContext,
+  externalUserId: string
+): Promise<SocialProfile> {
+  try {
+    if (channel === "instagram") {
+      const url = `https://graph.instagram.com/v21.0/${externalUserId}?fields=name,username,profile_pic`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${ctx.accessToken}` },
+      });
+      if (!res.ok) {
+        console.warn(
+          `[META instagram] Profile fetch failed (${res.status}) for ${externalUserId}`
+        );
+        return EMPTY_PROFILE;
+      }
+      const data = (await res.json()) as {
+        name?: string;
+        username?: string;
+        profile_pic?: string;
+      };
+      return {
+        name: data.name || null,
+        handle: data.username || null,
+        profilePicUrl: data.profile_pic || null,
+      };
+    }
+
+    // Facebook Messenger: PSID-scoped lookup against the Page access token.
+    const url = `https://graph.facebook.com/v21.0/${externalUserId}?fields=first_name,last_name,profile_pic`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${ctx.accessToken}` },
+    });
+    if (!res.ok) {
+      console.warn(
+        `[META facebook] Profile fetch failed (${res.status}) for ${externalUserId}`
+      );
+      return EMPTY_PROFILE;
+    }
+    const data = (await res.json()) as {
+      first_name?: string;
+      last_name?: string;
+      profile_pic?: string;
+    };
+    const name = [data.first_name, data.last_name].filter(Boolean).join(" ");
+    return {
+      name: name || null,
+      handle: null,
+      profilePicUrl: data.profile_pic || null,
+    };
+  } catch (err) {
+    console.error(`[META ${channel}] Profile fetch threw:`, err);
+    return EMPTY_PROFILE;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // Outbound — channel-specific send-message bodies
 // ─────────────────────────────────────────────────────────────
 
@@ -272,9 +355,7 @@ async function processMessageEvent(
     return;
   }
 
-  // Upsert SocialConversation. We don't have a rich contact profile from
-  // Meta on every event (that requires a second Graph call), so leave
-  // contactName null — it can be enriched later.
+  // Upsert SocialConversation.
   let conversation = await prisma.socialConversation.findUnique({
     where: {
       organizationId_channel_externalUserId: {
@@ -286,6 +367,10 @@ async function processMessageEvent(
   });
 
   if (!conversation) {
+    // Fetch the sender's profile from Graph API once, on first contact.
+    // Cached on the conversation + lead so future messages don't refetch.
+    const profile = await fetchSocialProfile(channel, ctx, senderId);
+
     // Best-effort lead linkage: social users don't give us a phone number,
     // so we park them as a synthetic phone using the sender id. This
     // matches how the website chat handles phone-less leads today.
@@ -303,8 +388,16 @@ async function processMessageEvent(
         data: {
           organizationId: ctx.organizationId,
           phone: syntheticPhone,
+          name: profile.name,
           source: channel,
         },
+      });
+    } else if (profile.name && !lead.name) {
+      // Lead existed (re-creation race / earlier failed fetch) but had no
+      // name. Fill it in now.
+      await prisma.lead.update({
+        where: { id: lead.id },
+        data: { name: profile.name },
       });
     }
 
@@ -314,6 +407,9 @@ async function processMessageEvent(
         channel,
         externalUserId: senderId,
         leadId: lead.id,
+        contactName: profile.name,
+        contactHandle: profile.handle,
+        profilePicUrl: profile.profilePicUrl,
       },
     });
   }

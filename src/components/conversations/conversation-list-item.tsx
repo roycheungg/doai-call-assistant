@@ -1,14 +1,14 @@
 import { cn } from "@/lib/utils";
+import { Star } from "lucide-react";
 import {
-  Star,
-  MessageCircle,
-  Globe,
-  Camera,
-  Send,
-  type LucideIcon,
-} from "lucide-react";
+  CHANNEL_META,
+  avatarColorFor,
+  initialsFor,
+  type Channel as SharedChannel,
+} from "@/lib/channels";
 
-type Channel = "whatsapp" | "website" | "instagram" | "facebook";
+// The conversation list only ever shows non-phone channels.
+type Channel = Exclude<SharedChannel, "phone">;
 
 interface ConversationListItemProps {
   id: string;
@@ -21,50 +21,6 @@ interface ConversationListItemProps {
   isActive: boolean;
   channel?: Channel;
   onClick: () => void;
-}
-
-// Per-channel badge metadata. Lucide removed Meta's brand icons in 1.x
-// (licensing), so we use evocative generics: Camera for Instagram (the
-// app's original camera icon), Send / paper-plane for Messenger.
-const CHANNEL_BADGE: Record<
-  Channel,
-  { icon: LucideIcon; bg: string; label: string }
-> = {
-  whatsapp: { icon: MessageCircle, bg: "bg-emerald-600", label: "WhatsApp" },
-  website: { icon: Globe, bg: "bg-violet-600", label: "Website chat" },
-  instagram: { icon: Camera, bg: "bg-pink-600", label: "Instagram" },
-  facebook: { icon: Send, bg: "bg-blue-600", label: "Messenger" },
-};
-
-function getInitials(name: string | null, phone: string): string {
-  if (name) {
-    return name
-      .split(" ")
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  }
-  return phone.slice(-2);
-}
-
-function getAvatarColor(name: string | null, phone: string): string {
-  const str = name || phone;
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const colors = [
-    "bg-blue-600",
-    "bg-emerald-600",
-    "bg-purple-600",
-    "bg-amber-600",
-    "bg-rose-600",
-    "bg-cyan-600",
-    "bg-indigo-600",
-    "bg-orange-600",
-  ];
-  return colors[Math.abs(hash) % colors.length];
 }
 
 function formatRelativeTime(dateStr: string): string {
@@ -96,9 +52,9 @@ export function ConversationListItem({
   channel,
   onClick,
 }: ConversationListItemProps) {
-  const initials = getInitials(contactName, phoneNumber);
-  const avatarColor = getAvatarColor(contactName, phoneNumber);
-  const badge = channel ? CHANNEL_BADGE[channel] : null;
+  const initials = initialsFor(contactName, phoneNumber);
+  const avatarColor = avatarColorFor(contactName || phoneNumber);
+  const badge = channel ? CHANNEL_META[channel] : null;
   const ChannelIcon = badge?.icon;
 
   return (

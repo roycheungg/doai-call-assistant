@@ -351,6 +351,12 @@ model SocialConversation {
   channel        String   // "instagram" | "facebook"
   externalUserId String   // IG scoped user id OR Messenger PSID
   contactName    String?
+  // Cached profile data fetched from Graph API on first contact, used for
+  // displaying the lead with a real handle and avatar instead of the
+  // opaque externalUserId. `contactHandle` is IG @username; FB has no
+  // native handle equivalent so it stays null for facebook conversations.
+  contactHandle  String?
+  profilePicUrl  String?
   leadId         String?
   lead           Lead?    @relation(fields: [leadId], references: [id])
   status         String   @default("active")
