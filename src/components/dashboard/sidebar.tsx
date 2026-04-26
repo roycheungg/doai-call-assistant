@@ -212,7 +212,7 @@ export function Sidebar() {
 
         {isSuperAdmin && (
           <Link
-            href="/admin/organizations"
+            href={`/admin/organizations${navSuffix}`}
             className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all mt-4 border-t border-white/10 pt-4",
               pathname?.startsWith("/admin")
