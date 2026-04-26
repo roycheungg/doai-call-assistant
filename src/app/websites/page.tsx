@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +28,17 @@ interface Site {
   _count: { conversations: number };
 }
 
+// Next 16 requires useSearchParams() to be wrapped in Suspense for any
+// prerenderable page — otherwise the build fails with a CSR-bailout error.
 export default function WebsitesPage() {
+  return (
+    <Suspense fallback={null}>
+      <WebsitesPageInner />
+    </Suspense>
+  );
+}
+
+function WebsitesPageInner() {
   const router = useRouter();
   // Preserve ?asOrg when navigating into a site detail. Without this,
   // super-admins viewing another org would jump back to their home org
