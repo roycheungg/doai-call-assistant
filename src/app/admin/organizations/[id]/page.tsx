@@ -127,8 +127,8 @@ export default function OrganizationDetailPage() {
   const [creatingSite, setCreatingSite] = useState(false);
   const [copiedSiteId, setCopiedSiteId] = useState<string | null>(null);
 
-  // Features & prompts (super-admin-only edits to this org's settings)
-  const [featuresSaving, setFeaturesSaving] = useState(false);
+  // Features & prompts (super-admin-only edits to this org's settings) —
+  // saved via the unified `save()` button at the top of the page.
   const [websiteForm, setWebsiteForm] = useState({
     siteId: "",
     name: "",
@@ -229,11 +229,16 @@ export default function OrganizationDetailPage() {
     load();
   }, [params.id]);
 
+  // Single Save button at the top of the page persists everything in one
+  // shot: org-level fields (name/plan/anthropic key/enabled) PLUS all the
+  // feature/prompt settings. Previously the page had two save buttons that
+  // hit different endpoints, which was easy to miss and led to people
+  // editing IG/FB prompts and walking away without saving them.
   async function save() {
     if (!org) return;
     setSaving(true);
     try {
-      await fetch(`/api/admin/organizations/${org.id}`, {
+      const orgPut = fetch(`/api/admin/organizations/${org.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -243,6 +248,38 @@ export default function OrganizationDetailPage() {
           enabled: org.enabled,
         }),
       });
+
+      const settingsPut = org.settings
+        ? fetch(`/api/settings?asOrg=${org.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chatbotEnabled: org.settings.chatbotEnabled,
+              whatsappEnabled: org.settings.whatsappEnabled,
+              voiceEnabled: org.settings.voiceEnabled,
+              whatsappSystemPrompt: org.settings.whatsappSystemPrompt,
+              instagramEnabled: org.settings.instagramEnabled,
+              instagramSystemPrompt: org.settings.instagramSystemPrompt,
+              instagramBusinessId: org.settings.instagramBusinessId,
+              instagramAccessToken: org.settings.instagramAccessToken,
+              facebookEnabled: org.settings.facebookEnabled,
+              facebookSystemPrompt: org.settings.facebookSystemPrompt,
+              facebookPageId: org.settings.facebookPageId,
+              facebookPageAccessToken: org.settings.facebookPageAccessToken,
+              calComApiKey: org.settings.calComApiKey,
+              calComEventTypeId: org.settings.calComEventTypeId,
+            }),
+          })
+        : Promise.resolve(null);
+
+      const [orgRes, settingsRes] = await Promise.all([orgPut, settingsPut]);
+      if (!orgRes.ok || (settingsRes && !settingsRes.ok)) {
+        const which = !orgRes.ok ? orgRes : settingsRes!;
+        const err = await which.json().catch(() => ({}));
+        alert(err.error || "Failed to save");
+        return;
+      }
+      await load();
     } finally {
       setSaving(false);
     }
@@ -316,44 +353,9 @@ export default function OrganizationDetailPage() {
     setUserForm((f) => ({ ...f, password: out }));
   }
 
-  async function saveFeatures() {
-    if (!org?.settings) return;
-    setFeaturesSaving(true);
-    try {
-      const res = await fetch(`/api/settings?asOrg=${org.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        // Send every editable feature field. Earlier this only sent four
-        // fields, which silently dropped IG/FB/Cal.com edits — typing into
-        // those inputs mutated local state but the values never reached
-        // the API, so the DB rows stayed NULL.
-        body: JSON.stringify({
-          chatbotEnabled: org.settings.chatbotEnabled,
-          whatsappEnabled: org.settings.whatsappEnabled,
-          voiceEnabled: org.settings.voiceEnabled,
-          whatsappSystemPrompt: org.settings.whatsappSystemPrompt,
-          instagramEnabled: org.settings.instagramEnabled,
-          instagramSystemPrompt: org.settings.instagramSystemPrompt,
-          instagramBusinessId: org.settings.instagramBusinessId,
-          instagramAccessToken: org.settings.instagramAccessToken,
-          facebookEnabled: org.settings.facebookEnabled,
-          facebookSystemPrompt: org.settings.facebookSystemPrompt,
-          facebookPageId: org.settings.facebookPageId,
-          facebookPageAccessToken: org.settings.facebookPageAccessToken,
-          calComApiKey: org.settings.calComApiKey,
-          calComEventTypeId: org.settings.calComEventTypeId,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        alert(err.error || "Failed to save features");
-        return;
-      }
-      await load();
-    } finally {
-      setFeaturesSaving(false);
-    }
-  }
+  // Note: feature/prompt saving was previously a separate `saveFeatures`
+  // function with its own button. It's now folded into `save()` above so
+  // a single click at the top of the page persists everything.
 
   function updateFeature<K extends keyof NonNullable<Org["settings"]>>(
     key: K,
@@ -490,16 +492,8 @@ export default function OrganizationDetailPage() {
       {/* Features & Prompts (super-admin only) */}
       {org.settings && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader>
             <CardTitle className="text-lg">Features & Prompts</CardTitle>
-            <Button
-              size="sm"
-              onClick={saveFeatures}
-              disabled={featuresSaving}
-            >
-              <Save className="w-4 h-4 mr-2" />
-              {featuresSaving ? "Saving..." : "Save"}
-            </Button>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-3">
