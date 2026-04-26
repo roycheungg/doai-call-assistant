@@ -438,6 +438,7 @@ async function processMessageEvent(
   const systemPrompt = await buildSystemPrompt(ctx.organizationId, channel);
   const aiResponse = await getChatResponse(chatMessages, systemPrompt, {
     organizationId: ctx.organizationId,
+    channel,
     allowCLI: true,
     // Let Claude extract issue / name / email / company onto the lead
     // when the customer shares them. Mirrors the Vapi voice flow.

@@ -16,6 +16,13 @@ interface ChatOptions {
   organizationId?: string;
   allowCLI?: boolean;
   /**
+   * Which messaging channel triggered this — used by the CLI path to
+   * label the trailing instruction ("Be concise — this is a {channel}
+   * message"). API path doesn't need it; the system prompt carries the
+   * channel context already. Defaults to "whatsapp" for back-compat.
+   */
+  channel?: MessagingChannel;
+  /**
    * When set, the Claude API call adds a `save_customer_details` tool.
    * If Claude decides to call it (the customer has shared name / email /
    * company / a description of what they need), we upsert those fields
@@ -178,35 +185,51 @@ Guidelines:
 
 function formatPromptForCLI(
   messages: ChatMessage[],
-  systemPrompt: string
+  channel: MessagingChannel = "whatsapp"
 ): string {
   const recentMessages = messages.slice(-30);
   const conversation = recentMessages
     .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
     .join("\n");
+  const label = CHANNEL_LABEL[channel];
 
-  return `${systemPrompt}
-
-Conversation so far:
+  return `Conversation so far:
 ${conversation}
 
-Respond to the last user message as the assistant. Be concise — this is a WhatsApp message.`;
+Respond to the last user message as the assistant. Be concise — this is a ${label} message.`;
 }
 
 async function getChatResponseCLI(
   messages: ChatMessage[],
-  systemPrompt: string
+  systemPrompt: string,
+  channel: MessagingChannel = "whatsapp"
 ): Promise<string> {
-  const prompt = formatPromptForCLI(messages, systemPrompt);
+  const prompt = formatPromptForCLI(messages, channel);
 
   // On Windows, execFile doesn't resolve .exe/.cmd via PATHEXT unless shell is used.
   // Pass the explicit extension so the binary is found on both platforms.
   const binary = process.platform === "win32" ? "claude.exe" : "claude";
 
+  // The CLI's default system prompt is the agentic-coding one — it pulls in
+  // CLAUDE.md/AGENTS.md from the cwd and the user's home dir, which on prod
+  // (cwd=/home/kaia/...) made the bot roleplay as "Kaia" and ignore our
+  // custom IG/WA persona. Pass --system-prompt to fully replace the default
+  // with the org's per-channel prompt; --bare disables CLAUDE.md auto-
+  // discovery and other agentic features we don't need for plain text
+  // completion. Together they ensure the only persona instructions Claude
+  // sees are the ones the super-admin typed into the form.
   return new Promise((resolve) => {
     execFile(
       binary,
-      ["-p", "--output-format", "text", prompt],
+      [
+        "-p",
+        "--bare",
+        "--output-format",
+        "text",
+        "--system-prompt",
+        systemPrompt,
+        prompt,
+      ],
       { timeout: 60_000, maxBuffer: 1024 * 1024 },
       (error, stdout, stderr) => {
         if (error) {
@@ -346,7 +369,7 @@ export async function getChatResponse(
     ) {
       // CLI path doesn't support tool use; lead extraction is silently
       // skipped. Acceptable: CLI is dev-only / Max-plan local testing.
-      return getChatResponseCLI(messages, systemPrompt);
+      return getChatResponseCLI(messages, systemPrompt, options.channel);
     }
   }
 
@@ -362,7 +385,7 @@ export async function getChatResponse(
 
   // Last-resort fallback
   if (options?.allowCLI) {
-    return getChatResponseCLI(messages, systemPrompt);
+    return getChatResponseCLI(messages, systemPrompt, options.channel);
   }
 
   return "Sorry, the AI service isn't configured yet. Please contact support.";

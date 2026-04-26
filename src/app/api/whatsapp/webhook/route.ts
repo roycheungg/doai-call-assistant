@@ -219,6 +219,7 @@ async function processMessage(
   const systemPrompt = await buildSystemPrompt(organizationId);
   const aiResponse = await getChatResponse(chatMessages, systemPrompt, {
     organizationId,
+    channel: "whatsapp",
     allowCLI: true,
     // Let Claude extract issue / name / email / company onto the lead
     // when the customer shares them. Mirrors the Vapi voice flow.
