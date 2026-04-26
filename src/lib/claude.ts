@@ -210,20 +210,22 @@ async function getChatResponseCLI(
   // Pass the explicit extension so the binary is found on both platforms.
   const binary = process.platform === "win32" ? "claude.exe" : "claude";
 
-  // The CLI's default system prompt is the agentic-coding one — it pulls in
-  // CLAUDE.md/AGENTS.md from the cwd and the user's home dir, which on prod
-  // (cwd=/home/kaia/...) made the bot roleplay as "Kaia" and ignore our
-  // custom IG/WA persona. Pass --system-prompt to fully replace the default
-  // with the org's per-channel prompt; --bare disables CLAUDE.md auto-
-  // discovery and other agentic features we don't need for plain text
-  // completion. Together they ensure the only persona instructions Claude
-  // sees are the ones the super-admin typed into the form.
+  // The CLI's default system prompt is the agentic-coding one — it pulls
+  // in CLAUDE.md/AGENTS.md from the cwd and the user's home dir, which on
+  // prod (cwd=/home/kaia/...) made the bot roleplay as "Kaia" and ignore
+  // our IG/WA persona. Pass --system-prompt to fully replace the default
+  // with the org's per-channel prompt.
+  //
+  // Note: tried adding --bare to skip CLAUDE.md auto-discovery, but that
+  // mode also disables OAuth/keychain auth and requires ANTHROPIC_API_KEY,
+  // which we don't set on prod. Without --bare the CLI will still pick up
+  // CLAUDE.md from the cwd, but --system-prompt's full replacement of the
+  // default agentic prompt is enough to neutralise the persona bleed.
   return new Promise((resolve) => {
     execFile(
       binary,
       [
         "-p",
-        "--bare",
         "--output-format",
         "text",
         "--system-prompt",
