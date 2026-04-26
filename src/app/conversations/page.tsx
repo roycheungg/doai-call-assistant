@@ -93,6 +93,13 @@ const CHANNEL_TABS: { value: ChannelFilter; label: string }[] = [
   { value: "facebook", label: "Messenger" },
 ];
 
+type ChannelFlags = {
+  whatsapp: boolean;
+  website: boolean;
+  instagram: boolean;
+  facebook: boolean;
+};
+
 export default function ConversationsPage() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeConversation, setActiveConversation] =
@@ -102,6 +109,41 @@ export default function ConversationsPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
   const [search, setSearch] = useState("");
+  // Per-org channel feature flags. `null` while loading; once loaded, the
+  // tab list is filtered to only enabled channels and any previously-
+  // selected disabled channel auto-resets to "all".
+  const [channelFlags, setChannelFlags] = useState<ChannelFlags | null>(null);
+
+  // Load per-org channel feature flags once. Mirrors the sidebar's logic
+  // (components/dashboard/sidebar.tsx) so disabled channels disappear from
+  // both the side nav and the conversations tab list.
+  useEffect(() => {
+    apiFetch("/api/settings")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d?.settings) return;
+        setChannelFlags({
+          whatsapp: !!d.settings.whatsappEnabled,
+          website: !!d.settings.chatbotEnabled,
+          instagram: !!d.settings.instagramEnabled,
+          facebook: !!d.settings.facebookEnabled,
+        });
+      })
+      .catch(() => {});
+  }, []);
+
+  // If the current channelFilter is for a disabled channel, snap back to "all".
+  useEffect(() => {
+    if (!channelFlags) return;
+    if (channelFilter === "all") return;
+    if (!channelFlags[channelFilter]) setChannelFilter("all");
+  }, [channelFlags, channelFilter]);
+
+  const visibleChannelTabs = channelFlags
+    ? CHANNEL_TABS.filter(
+        (tab) => tab.value === "all" || channelFlags[tab.value]
+      )
+    : CHANNEL_TABS;
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
@@ -212,7 +254,7 @@ export default function ConversationsPage() {
 
           {/* Channel tabs */}
           <div className="flex gap-1 mb-2">
-            {CHANNEL_TABS.map((tab) => (
+            {visibleChannelTabs.map((tab) => (
               <button
                 key={tab.value}
                 onClick={() => setChannelFilter(tab.value)}

@@ -39,6 +39,26 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search");
     const channel = searchParams.get("channel") || "all";
 
+    // Honour per-org channel feature flags. A disabled channel returns no
+    // rows even if data exists (legacy or pre-disable conversations stay in
+    // the DB but become invisible until the channel is re-enabled). Mirrors
+    // the sidebar's nav-visibility logic in components/dashboard/sidebar.tsx.
+    const settings = await prisma.organizationSettings.findUnique({
+      where: { organizationId: ctx.organizationId },
+      select: {
+        whatsappEnabled: true,
+        chatbotEnabled: true,
+        instagramEnabled: true,
+        facebookEnabled: true,
+      },
+    });
+    const enabled = {
+      whatsapp: settings?.whatsappEnabled ?? false,
+      website: settings?.chatbotEnabled ?? false,
+      instagram: settings?.instagramEnabled ?? false,
+      facebook: settings?.facebookEnabled ?? false,
+    };
+
     // Clamp untrusted inputs. Max limit 100; max page 500 (hard stop on
     // runaway deep-paging — a tenant hitting page 501 has bigger problems).
     const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 100);
@@ -65,7 +85,7 @@ export async function GET(req: NextRequest) {
     let socialTotal = 0;
 
     // WhatsApp conversations
-    if (channel === "all" || channel === "whatsapp") {
+    if (enabled.whatsapp && (channel === "all" || channel === "whatsapp")) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const waWhere: any = { ...baseWhere };
       if (search) {
@@ -114,7 +134,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Website conversations
-    if (channel === "all" || channel === "website") {
+    if (enabled.website && (channel === "all" || channel === "website")) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const webWhere: any = { ...baseWhere };
       if (search) {
@@ -165,8 +185,10 @@ export async function GET(req: NextRequest) {
     }
 
     // Social conversations (Instagram + Facebook Messenger)
-    const wantInstagram = channel === "all" || channel === "instagram";
-    const wantFacebook = channel === "all" || channel === "facebook";
+    const wantInstagram =
+      enabled.instagram && (channel === "all" || channel === "instagram");
+    const wantFacebook =
+      enabled.facebook && (channel === "all" || channel === "facebook");
     if (wantInstagram || wantFacebook) {
       const channelFilter =
         wantInstagram && wantFacebook
