@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -30,6 +30,12 @@ interface Site {
 
 export default function WebsitesPage() {
   const router = useRouter();
+  // Preserve ?asOrg when navigating into a site detail. Without this,
+  // super-admins viewing another org would jump back to their home org
+  // on click. Mirrors the navSuffix pattern used in the sidebar.
+  const searchParams = useSearchParams();
+  const asOrg = searchParams.get("asOrg");
+  const navSuffix = asOrg ? `?asOrg=${asOrg}` : "";
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -107,7 +113,7 @@ export default function WebsitesPage() {
                   <TableRow
                     key={site.id}
                     className="cursor-pointer hover:bg-white/5"
-                    onClick={() => router.push(`/websites/${site.id}`)}
+                    onClick={() => router.push(`/websites/${site.id}${navSuffix}`)}
                   >
                     <TableCell className="font-medium">{site.name}</TableCell>
                     <TableCell>
