@@ -247,6 +247,15 @@ model WhatsAppConversation {
   @@index([phoneNumber])
   @@index([status])
   @@index([lastMessageAt])
+  // Compound indexes covering the conversations-page query patterns:
+  //   - default sort (orgId + lastMessageAt DESC)
+  //   - unread filter (orgId + isRead, then range over lastMessageAt)
+  //   - starred filter (orgId + starred + lastMessageAt DESC)
+  // Without these, the unread/starred filters on a tenant with 10k+
+  // conversations table-scan after picking the orgId index.
+  @@index([organizationId, lastMessageAt(sort: Desc)])
+  @@index([organizationId, isRead, lastMessageAt(sort: Desc)])
+  @@index([organizationId, starred, lastMessageAt(sort: Desc)])
   @@map("ca_whatsapp_conversations")
 }
 
@@ -317,6 +326,10 @@ model WebsiteConversation {
   @@index([siteId])
   @@index([sessionId])
   @@index([lastMessageAt])
+  // See WhatsAppConversation for index rationale.
+  @@index([organizationId, lastMessageAt(sort: Desc)])
+  @@index([organizationId, isRead, lastMessageAt(sort: Desc)])
+  @@index([organizationId, starred, lastMessageAt(sort: Desc)])
   @@map("ca_website_conversations")
 }
 
@@ -369,6 +382,10 @@ model SocialConversation {
   @@index([organizationId])
   @@index([channel])
   @@index([lastMessageAt])
+  // See WhatsAppConversation for index rationale.
+  @@index([organizationId, lastMessageAt(sort: Desc)])
+  @@index([organizationId, isRead, lastMessageAt(sort: Desc)])
+  @@index([organizationId, starred, lastMessageAt(sort: Desc)])
   @@map("ca_social_conversations")
 }
 

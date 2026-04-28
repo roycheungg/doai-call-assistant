@@ -109,9 +109,22 @@ export async function GET(
       );
     }
 
+    // Hand-pick fields to match the canonical shape used by the website
+    // and social branches. Earlier we spread `...conversation` which leaked
+    // internal columns (waId, organizationId, raw timestamps, etc.) and
+    // diverged from the other branches' shapes.
     return NextResponse.json({
-      ...conversation,
+      id: conversation.id,
       channel: "whatsapp",
+      contactName: conversation.contactName,
+      phoneNumber: conversation.phoneNumber,
+      status: conversation.status,
+      isRead: conversation.isRead,
+      starred: conversation.starred,
+      createdAt: conversation.createdAt,
+      lastMessageAt: conversation.lastMessageAt,
+      lead: conversation.lead,
+      messages: conversation.messages,
     });
   } catch (error) {
     console.error("[CONVERSATION API] GET error:", error);

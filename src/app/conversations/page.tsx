@@ -159,26 +159,68 @@ export default function ConversationsPage() {
   const [contactPanelOpen, setContactPanelOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const fetchConversations = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (filter !== "all") params.set("filter", filter);
-      if (channelFilter !== "all") params.set("channel", channelFilter);
-      if (searchDebounced) params.set("search", searchDebounced);
-      const res = await apiFetch(`/api/conversations?${params}`);
-      const data = await res.json();
-      setConversations(data.conversations || []);
-    } catch (error) {
-      console.error("Failed to fetch conversations:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [filter, channelFilter, searchDebounced]);
+  const fetchConversations = useCallback(
+    async (silent = false) => {
+      if (!silent) setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (filter !== "all") params.set("filter", filter);
+        if (channelFilter !== "all") params.set("channel", channelFilter);
+        if (searchDebounced) params.set("search", searchDebounced);
+        const res = await apiFetch(`/api/conversations?${params}`);
+        const data = await res.json();
+        setConversations(data.conversations || []);
+      } catch (error) {
+        if (!silent) console.error("Failed to fetch conversations:", error);
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [filter, channelFilter, searchDebounced]
+  );
 
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
+
+  // Background refetch of the active conversation's messages — used by the
+  // polling effect below. Does NOT trigger the read PATCH or mobile view
+  // change; those only run on explicit user selection.
+  const refetchActive = useCallback(async () => {
+    if (!selectedId) return;
+    try {
+      const res = await apiFetch(
+        `/api/conversations/${selectedId}?channel=${selectedChannel}`
+      );
+      if (!res.ok) return;
+      const data: ConversationDetail = await res.json();
+      // Only update if the data is for the same conversation we still have
+      // selected — avoids racing with a fast user selection switch.
+      setActiveConversation((prev) =>
+        prev && prev.id === data.id ? data : prev
+      );
+    } catch {
+      // Background refresh — swallow errors silently.
+    }
+  }, [selectedId, selectedChannel]);
+
+  // Poll every 15s for new messages on the list and on the active
+  // conversation. Skips ticks when the tab is hidden so we don't spam the
+  // API while idle. Polls also pause while the user is mid-search (the
+  // debounce handles that — searchDebounced is the dep).
+  useEffect(() => {
+    const POLL_MS = 15_000;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    function tick() {
+      if (typeof document !== "undefined" && document.hidden) return;
+      fetchConversations(true);
+      refetchActive();
+    }
+    timer = setInterval(tick, POLL_MS);
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [fetchConversations, refetchActive]);
 
   async function selectConversation(id: string, channel: Channel) {
     setSelectedId(id);
