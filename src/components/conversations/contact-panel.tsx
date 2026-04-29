@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Star, Phone, Mail, Building2, Calendar, MessageCircle, AtSign } from "lucide-react";
+import { Star, Phone, Mail, Building2, Calendar, MessageCircle, AtSign, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { avatarColorFor, initialsFor } from "@/lib/channels";
@@ -29,11 +29,19 @@ interface ContactPanelProps {
       status: string;
       source: string;
     } | null;
+    /** ISO timestamp of the last persona reset, or null if never reset. */
+    personaResetAt?: string | null;
   };
   onToggleStar: () => void;
+  /** Triggered by the "Reset persona" button in the AI section. */
+  onResetPersona: () => void;
 }
 
-export function ContactPanel({ conversation, onToggleStar }: ContactPanelProps) {
+export function ContactPanel({
+  conversation,
+  onToggleStar,
+  onResetPersona,
+}: ContactPanelProps) {
   const nameForDisplay =
     conversation.contactName || conversation.lead?.name || null;
   const displayName = nameForDisplay || conversation.phoneNumber;
@@ -180,6 +188,38 @@ export function ContactPanel({ conversation, onToggleStar }: ContactPanelProps) 
               Joined {format(new Date(conversation.createdAt), "MMM d, yyyy")}
             </span>
           </div>
+        </div>
+
+        <Separator className="bg-white/10" />
+
+        {/* AI controls — manual override for the bot's behaviour on this
+            conversation. Reset persona = ignore everything before NOW
+            when generating future replies (used after the org changes
+            its system prompt and wants old conversations to switch
+            cleanly to the new persona). */}
+        <div>
+          <h4 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+            AI
+          </h4>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onResetPersona}
+            className="w-full justify-start gap-2 text-xs"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Reset persona
+          </Button>
+          {conversation.personaResetAt && (
+            <p className="text-[11px] text-slate-500 mt-1.5">
+              Last reset{" "}
+              {format(new Date(conversation.personaResetAt), "MMM d, h:mm a")}
+            </p>
+          )}
+          <p className="text-[11px] text-slate-500 mt-1.5">
+            The bot will ignore messages before the reset point when
+            generating new replies. Customer history stays visible here.
+          </p>
         </div>
       </div>
     </div>

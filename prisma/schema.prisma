@@ -241,6 +241,13 @@ model WhatsAppConversation {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // When the org's system prompt changes, the admin can flip this to
+  // NOW() so the AI ignores conversation history older than the reset
+  // when generating its next reply. Customer-facing inbox UI still
+  // shows the full history — only the prompt-construction path filters.
+  // NULL = no reset, feed all history (default behaviour).
+  personaResetAt DateTime?
+
   @@unique([organizationId, waId])
   @@index([organizationId])
   @@index([waId])
@@ -322,6 +329,9 @@ model WebsiteConversation {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // See WhatsAppConversation for personaResetAt rationale.
+  personaResetAt DateTime?
+
   @@index([organizationId])
   @@index([siteId])
   @@index([sessionId])
@@ -377,6 +387,9 @@ model SocialConversation {
   messages       SocialMessage[]
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  // See WhatsAppConversation for personaResetAt rationale.
+  personaResetAt DateTime?
 
   @@unique([organizationId, channel, externalUserId])
   @@index([organizationId])

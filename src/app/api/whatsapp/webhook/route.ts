@@ -206,8 +206,18 @@ async function processMessage(
     },
   });
 
+  // Honour per-conversation persona reset: the admin can flip
+  // personaResetAt to NOW() after changing the org's system prompt, so the
+  // AI ignores history that referenced the old persona. Customer-facing
+  // inbox still shows the full history — only this prompt-construction
+  // path filters. NULL = no reset → feed all history (default).
   const history = await prisma.whatsAppMessage.findMany({
-    where: { conversationId: conversation.id },
+    where: {
+      conversationId: conversation.id,
+      ...(conversation.personaResetAt
+        ? { createdAt: { gte: conversation.personaResetAt } }
+        : {}),
+    },
     orderBy: { createdAt: "asc" },
     select: { role: true, content: true },
   });

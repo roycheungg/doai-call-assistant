@@ -73,6 +73,8 @@ interface ConversationDetail {
   messages: DetailMessage[];
   profilePicUrl?: string | null;
   handle?: string | null;
+  /** ISO timestamp of the last persona reset, or null if never reset. */
+  personaResetAt?: string | null;
 }
 
 type Filter = "all" | "unread" | "recent" | "starred";
@@ -284,6 +286,29 @@ export default function ConversationsPage() {
     }
   }
 
+  async function resetPersona() {
+    if (!activeConversation) return;
+    if (
+      !confirm(
+        "Reset the AI persona on this conversation? Future replies will ignore earlier messages, so the bot will start fresh with the current system prompt. The customer's history stays visible in this view."
+      )
+    ) {
+      return;
+    }
+    const res = await apiFetch(
+      `/api/conversations/${activeConversation.id}/persona-reset?channel=${activeConversation.channel}`,
+      { method: "PATCH" }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      setActiveConversation((prev) =>
+        prev ? { ...prev, personaResetAt: data.personaResetAt } : null
+      );
+    } else {
+      alert("Failed to reset persona. Please try again.");
+    }
+  }
+
   // For the ContactPanel we need to adapt the website shape to what the panel expects
   const contactPanelData = activeConversation
     ? {
@@ -300,6 +325,7 @@ export default function ConversationsPage() {
         lead: activeConversation.lead,
         profilePicUrl: activeConversation.profilePicUrl,
         handle: activeConversation.handle,
+        personaResetAt: activeConversation.personaResetAt,
       }
     : null;
 
@@ -479,6 +505,7 @@ export default function ConversationsPage() {
           <ContactPanel
             conversation={contactPanelData}
             onToggleStar={toggleStar}
+            onResetPersona={resetPersona}
           />
         ) : (
           <div className="flex items-center justify-center h-full w-full text-slate-600">
@@ -511,6 +538,7 @@ export default function ConversationsPage() {
               <ContactPanel
                 conversation={contactPanelData}
                 onToggleStar={toggleStar}
+                onResetPersona={resetPersona}
               />
             </div>
           </div>

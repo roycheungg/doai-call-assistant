@@ -113,9 +113,17 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Load conversation history
+    // Load conversation history. Honour per-conversation persona reset
+    // (see WhatsApp handler for rationale): if the admin set
+    // personaResetAt after changing the site's system prompt, only feed
+    // messages from that point onward.
     const history = await prisma.websiteMessage.findMany({
-      where: { conversationId: conversation.id },
+      where: {
+        conversationId: conversation.id,
+        ...(conversation.personaResetAt
+          ? { createdAt: { gte: conversation.personaResetAt } }
+          : {}),
+      },
       orderBy: { createdAt: "asc" },
       select: { role: true, content: true },
     });

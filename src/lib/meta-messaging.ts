@@ -419,9 +419,17 @@ async function processMessageEvent(
     },
   });
 
-  // Build conversation history for Claude.
+  // Build conversation history for Claude. Honour per-conversation
+  // persona reset (see WhatsApp handler for full rationale): if the
+  // admin set personaResetAt after changing the org prompt, only feed
+  // messages from that point onward.
   const history = await prisma.socialMessage.findMany({
-    where: { conversationId: conversation.id },
+    where: {
+      conversationId: conversation.id,
+      ...(conversation.personaResetAt
+        ? { createdAt: { gte: conversation.personaResetAt } }
+        : {}),
+    },
     orderBy: { createdAt: "asc" },
     select: { role: true, content: true },
   });

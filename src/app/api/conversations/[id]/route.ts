@@ -56,6 +56,7 @@ export async function GET(
         starred: conv.starred,
         createdAt: conv.createdAt,
         lastMessageAt: conv.lastMessageAt,
+        personaResetAt: conv.personaResetAt,
         userAgent: conv.userAgent,
         referrer: conv.referrer,
         site: conv.site,
@@ -87,6 +88,7 @@ export async function GET(
         starred: conv.starred,
         createdAt: conv.createdAt,
         lastMessageAt: conv.lastMessageAt,
+        personaResetAt: conv.personaResetAt,
         lead: conv.lead,
         messages: conv.messages,
         profilePicUrl: conv.profilePicUrl,
@@ -123,6 +125,7 @@ export async function GET(
       starred: conversation.starred,
       createdAt: conversation.createdAt,
       lastMessageAt: conversation.lastMessageAt,
+      personaResetAt: conversation.personaResetAt,
       lead: conversation.lead,
       messages: conversation.messages,
     });
