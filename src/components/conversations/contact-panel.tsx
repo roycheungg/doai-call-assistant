@@ -44,11 +44,18 @@ export function ContactPanel({
 }: ContactPanelProps) {
   const nameForDisplay =
     conversation.contactName || conversation.lead?.name || null;
-  const displayName = nameForDisplay || conversation.phoneNumber;
-  const initials = initialsFor(nameForDisplay, conversation.phoneNumber);
-  const avatarColor = avatarColorFor(
-    nameForDisplay || conversation.phoneNumber
-  );
+  // Fallback ladder: real name → @handle (IG) → phone (WA) → "—".
+  // Prevents the panel from showing an empty header for fresh IG/FB
+  // contacts whose Graph profile fetch hasn't completed yet.
+  const displayName =
+    nameForDisplay ||
+    (conversation.handle ? `@${conversation.handle}` : null) ||
+    conversation.phoneNumber ||
+    "—";
+  const initialsSeed =
+    nameForDisplay || conversation.handle || conversation.phoneNumber;
+  const initials = initialsFor(nameForDisplay, initialsSeed);
+  const avatarColor = avatarColorFor(initialsSeed);
   // Same fallback story as conversation-list-item: Meta CDN URLs expire,
   // so detect load failure and render the coloured initials avatar.
   const [imgFailed, setImgFailed] = useState(false);
@@ -84,9 +91,11 @@ export function ContactPanel({
             @{conversation.handle}
           </p>
         )}
-        <p className="text-xs text-slate-500 mt-0.5">
-          {conversation.phoneNumber}
-        </p>
+        {conversation.phoneNumber && (
+          <p className="text-xs text-slate-500 mt-0.5">
+            {conversation.phoneNumber}
+          </p>
+        )}
 
         <div className="flex items-center gap-2 mt-3">
           <Badge
@@ -128,10 +137,14 @@ export function ContactPanel({
                 <span className="text-slate-300">{conversation.handle}</span>
               </div>
             )}
-            <div className="flex items-center gap-2.5 text-sm">
-              <Phone className="w-3.5 h-3.5 text-slate-500" />
-              <span className="text-slate-300">{conversation.phoneNumber}</span>
-            </div>
+            {conversation.phoneNumber && (
+              <div className="flex items-center gap-2.5 text-sm">
+                <Phone className="w-3.5 h-3.5 text-slate-500" />
+                <span className="text-slate-300">
+                  {conversation.phoneNumber}
+                </span>
+              </div>
+            )}
             {conversation.lead?.email && (
               <div className="flex items-center gap-2.5 text-sm">
                 <Mail className="w-3.5 h-3.5 text-slate-500" />

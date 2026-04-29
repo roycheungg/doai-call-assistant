@@ -64,6 +64,26 @@ export function ConversationListItem({
   const avatarColor = avatarColorFor(contactName || phoneNumber);
   const badge = channel ? CHANNEL_META[channel] : null;
   const ChannelIcon = badge?.icon;
+
+  // Fallback ladder for the primary display name. For IG/FB the API
+  // sends phoneNumber: "" — we land on the handle (or a friendly
+  // channel placeholder when even that is missing on first contact).
+  const channelPlaceholder =
+    channel === "instagram"
+      ? "Instagram user"
+      : channel === "facebook"
+      ? "Messenger user"
+      : channel === "website"
+      ? "Visitor"
+      : "Unknown";
+  const primaryName =
+    contactName ||
+    (handle ? `@${handle}` : null) ||
+    phoneNumber ||
+    channelPlaceholder;
+  // Only show the secondary "@handle" row if the primary line isn't
+  // already showing the same handle.
+  const showHandleSecondary = handle && contactName;
   // Meta CDN URLs for IG/FB profile pics expire (~24h). When the cached
   // URL 404s the Image silently shows a broken icon. Track the load
   // failure and fall back to the coloured initials avatar.
@@ -122,14 +142,14 @@ export function ConversationListItem({
               !isRead ? "font-semibold text-white" : "font-medium text-slate-300"
             )}
           >
-            {contactName || phoneNumber}
+            {primaryName}
           </span>
           <span className="text-[10px] text-slate-500 shrink-0">
             {formatRelativeTime(lastMessageAt)}
           </span>
         </div>
 
-        {handle && (
+        {showHandleSecondary && (
           <div className="text-[11px] text-slate-500 truncate -mt-0.5">
             @{handle}
           </div>

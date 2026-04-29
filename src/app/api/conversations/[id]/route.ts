@@ -82,7 +82,12 @@ export async function GET(
         id: conv.id,
         channel: conv.channel,
         contactName: conv.contactName,
-        phoneNumber: conv.externalUserId, // display the IG/FB handle-equivalent
+        // IG/FB don't have a phone number — externalUserId is a Meta-
+        // internal sender id, not a phone, and surfacing it caused the
+        // UI to render strings like "4399588490370035" under the
+        // contact name. Frontend falls back to @handle / channel
+        // placeholder when this is empty.
+        phoneNumber: "",
         status: conv.status,
         isRead: conv.isRead,
         starred: conv.starred,

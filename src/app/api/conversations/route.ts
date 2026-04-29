@@ -231,7 +231,12 @@ export async function GET(req: NextRequest) {
           id: c.id,
           channel: c.channel as "instagram" | "facebook",
           contactName: c.contactName || c.lead?.name || null,
-          identifier: c.externalUserId,
+          // Don't surface the Meta-internal sender id as the row's
+          // identifier — it looks like a 16-digit "phone number" in the
+          // UI. The handle is already on its own field and the
+          // list-item component falls back through contactName → handle
+          // → channel-specific placeholder.
+          identifier: "",
           lastMessage: c.messages[0]?.content || null,
           lastMessageAt: c.lastMessageAt.toISOString(),
           isRead: c.isRead,
